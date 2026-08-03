@@ -1,0 +1,28 @@
+# Robot Cloud Agent default configuration. Environment variables (set by
+# docker-compose.yml, and eventually by whatever process manager runs on
+# the real robot's companion computer) always take precedence over these
+# values - see robot_agent/config.py.
+
+robot:
+  id: turtlebot3_01
+
+mqtt:
+  host: mosquitto
+  port: 1883
+  keepalive: 30
+
+intervals:
+  heartbeat_seconds: 1
+  telemetry_seconds: 1
+  health_seconds: 2
+  watchdog_check_seconds: 5
+  watchdog_unhealthy_after_seconds: 15
+
+motion:
+  linear_speed: 0.2
+  angular_speed: 0.5
+
+health_server:
+  port: 8080
+
+log_level: INFO

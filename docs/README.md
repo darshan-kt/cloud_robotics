@@ -14,10 +14,10 @@ Each doc follows the same three-part shape:
 |---|---|---|---|
 | 00 | [Architecture Overview](00-overview.md) | — (context for everything) | ✅ |
 | 01 | [Repository Structure](01-repository-structure.md) | 1 — Repository structure & docs framework | ✅ |
-| 02 | Docker Foundations | 2 — Docker setup | ⏳ |
-| 03 | The MQTT Layer | 3 — MQTT layer | ⏳ |
-| 04 | The Robot Cloud Agent | 4 — Robot Cloud Agent core | ⏳ |
-| 05 | ROS2 & Turtlebot3 Integration | 5 — ROS2 + Gazebo | ⏳ |
+| 02 | [Docker Foundations](02-docker-foundations.md) | 2 — Docker setup | ✅ |
+| 03 | [The MQTT Layer](03-mqtt-layer.md) | 3 — MQTT layer | ✅ |
+| 04 | [The Robot Cloud Agent](04-robot-agent.md) | 4 — Robot Cloud Agent core | ✅ |
+| 05 | [ROS2 & Turtlebot3 Integration](05-ros2-integration.md) | 5 — ROS2 + Gazebo | ✅ |
 | 06 | Video Streaming (GStreamer + WebRTC) | 6 — Camera pipeline | ⏳ |
 | 07 | The Cloud Backend | 7 — FastAPI backend | ⏳ |
 | 08 | WebRTC Signalling | 8 — Signalling | ⏳ |

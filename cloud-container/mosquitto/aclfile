@@ -1,0 +1,30 @@
+# Topic permissions per authenticated user. No secrets live here - only the
+# password file (generated at container startup, never committed) does.
+# See docs/03-mqtt-layer.md for the full topic contract and the reasoning
+# behind this design.
+
+# --- backend: fleet-wide visibility, can command any robot ---
+# Explicitly NOT granted write on telemetry/health/status/heartbeat - a
+# compromised backend should not be able to impersonate a robot's own
+# reported state, only issue commands and read what robots report.
+user backend
+topic readwrite robots/+/cmd
+topic read robots/+/telemetry
+topic read robots/+/health
+topic read robots/+/status
+topic read robots/+/camera
+topic read robots/+/heartbeat
+
+# --- robots: one rule set for every robot, no per-robot editing ---
+# Each robot's MQTT username IS its robot_id (see
+# docker-entrypoint-wrapper.sh), so Mosquitto's %u substitution scopes every
+# robot to exactly its own robots/{robot_id}/... namespace automatically.
+# Onboarding robot #2 means issuing it a credential, not editing this file -
+# the same role AWS IoT Core policy variables like
+# ${iot:Connection.Thing.ThingName} play for per-thing policies.
+pattern read robots/%u/cmd
+pattern write robots/%u/telemetry
+pattern write robots/%u/health
+pattern write robots/%u/status
+pattern write robots/%u/camera
+pattern write robots/%u/heartbeat

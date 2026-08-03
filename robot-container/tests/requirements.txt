@@ -1,0 +1,4 @@
+# Test-only dependencies - kept separate from requirements.txt so pytest
+# never ends up in the production robot image.
+pytest==8.3.3
+pytest-asyncio==0.24.0

@@ -1,0 +1,165 @@
+name: cloud-robotics
+
+networks:
+  cloud-robotics-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  mosquitto-data:
+  mosquitto-log:
+
+services:
+  # --- MQTT broker: the only channel the cloud uses to reach the robot ---
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: cloud-robotics-mosquitto
+    networks:
+      - cloud-robotics-net
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+    # Overrides the stock image entrypoint to generate passwordfile from
+    # env vars first - see docker-entrypoint-wrapper.sh and docs/03-mqtt-layer.md.
+    entrypoint: ["/bin/sh", "/docker-entrypoint-wrapper.sh"]
+    environment:
+      MQTT_BACKEND_USERNAME: ${MQTT_BACKEND_USERNAME:-backend}
+      MQTT_BACKEND_PASSWORD: ${MQTT_BACKEND_PASSWORD:-backend_dev_password}
+      ROBOT_ID: ${ROBOT_ID:-turtlebot3_01}
+      MQTT_ROBOT_PASSWORD: ${MQTT_ROBOT_PASSWORD:-robot_dev_password}
+    volumes:
+      - ./cloud-container/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./cloud-container/mosquitto/aclfile:/mosquitto/config/aclfile:ro
+      - ./cloud-container/mosquitto/docker-entrypoint-wrapper.sh:/docker-entrypoint-wrapper.sh:ro
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    healthcheck:
+      # QoS 0 publish returns success once authenticated and connected, even
+      # though "healthcheck" itself isn't an ACL-granted topic for backend -
+      # that's fine, connect+auth succeeding is exactly what we're checking.
+      test: ["CMD-SHELL", "mosquitto_pub -h localhost -p 1883 -u \"$$MQTT_BACKEND_USERNAME\" -P \"$$MQTT_BACKEND_PASSWORD\" -t healthcheck -m ping -q 0 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  # --- Redis: not yet used by the backend (arrives Milestone 7), started
+  #     and health-checked now so the full stack topology is real from day one ---
+  redis:
+    image: redis:7-alpine
+    container_name: cloud-robotics-redis
+    networks:
+      - cloud-robotics-net
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # --- PostgreSQL: same story as Redis - present, healthy, unused until Milestone 7 ---
+  postgres:
+    image: postgres:16-alpine
+    container_name: cloud-robotics-postgres
+    networks:
+      - cloud-robotics-net
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cloud_robotics}
+      POSTGRES_USER: ${POSTGRES_USER:-robotics}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-robotics_dev_password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-robotics} -d ${POSTGRES_DB:-cloud_robotics}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # --- FastAPI backend: never talks to ROS2, only MQTT/Redis/Postgres ---
+  backend:
+    build:
+      context: ./cloud-container
+      dockerfile: docker/backend.Dockerfile
+    container_name: cloud-robotics-backend
+    networks:
+      - cloud-robotics-net
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MQTT_HOST: ${MQTT_HOST:-mosquitto}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-cloud_robotics}
+      POSTGRES_USER: ${POSTGRES_USER:-robotics}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-robotics_dev_password}
+      BACKEND_PORT: ${BACKEND_PORT:-8000}
+    # Dev convenience: bind-mount source + add --reload. The image itself
+    # (Dockerfile CMD) runs without --reload, which is what actually ships.
+    volumes:
+      - ./cloud-container/backend/app:/app/app
+      - ./cloud-container/config:/app/config:ro
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # --- React operator console: talks only to the backend, never to MQTT/ROS2 directly ---
+  frontend:
+    build:
+      context: ./cloud-container/frontend
+      dockerfile: ../docker/frontend.Dockerfile
+      target: dev
+    container_name: cloud-robotics-frontend
+    networks:
+      - cloud-robotics-net
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      # VITE_API_BASE_URL feeds the Vite dev server (this target). API_BASE_URL
+      # feeds the nginx entrypoint's envsubst step used by the "prod" target.
+      # Both must be a BROWSER-reachable address, never the internal service name.
+      VITE_API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
+    volumes:
+      - ./cloud-container/frontend/src:/app/src
+      - ./cloud-container/frontend/index.html:/app/index.html
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # --- Robot: ROS2 Humble base image running the real Robot Cloud Agent
+  #     (Milestone 4) against a MockROSAdapter - real ROS2 arrives Milestone 5 ---
+  robot:
+    build:
+      context: ./robot-container
+      dockerfile: docker/Dockerfile
+    container_name: cloud-robotics-robot
+    networks:
+      - cloud-robotics-net
+    ports:
+      - "${ROBOT_HEALTH_PORT:-8080}:8080"
+    environment:
+      ROBOT_ID: ${ROBOT_ID:-turtlebot3_01}
+      MQTT_HOST: ${MQTT_HOST:-mosquitto}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      # The robot authenticates as username=ROBOT_ID - see aclfile's %u pattern.
+      MQTT_ROBOT_PASSWORD: ${MQTT_ROBOT_PASSWORD:-robot_dev_password}
+      ROBOT_HEALTH_PORT: ${ROBOT_HEALTH_PORT:-8080}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped

@@ -1,0 +1,4 @@
+# Test-only dependencies - deliberately separate from backend/requirements.txt
+# so pytest/paho-mqtt never end up in the production backend image.
+pytest==8.3.3
+paho-mqtt==1.6.1

@@ -45,10 +45,10 @@ See [`docs/01-repository-structure.md`](docs/01-repository-structure.md) for a f
 This is being implemented one milestone at a time. Each milestone is reviewed and runnable before the next begins.
 
 - [x] 1. Repository structure & docs framework
-- [ ] 2. Docker setup (compose file, Dockerfiles, minimal bootable services)
-- [ ] 3. MQTT layer (broker config, topic contracts, pub/sub tests)
-- [ ] 4. Robot Cloud Agent core (config, logging, DI, MQTT client, heartbeat, health, watchdog)
-- [ ] 5. ROS2 + Turtlebot3 + Gazebo integration (real `ROSAdapter`)
+- [x] 2. Docker setup (compose file, Dockerfiles, minimal bootable services)
+- [x] 3. MQTT layer (broker config, topic contracts, pub/sub tests)
+- [x] 4. Robot Cloud Agent core (config, logging, DI, MQTT client, heartbeat, health, watchdog)
+- [x] 5. ROS2 + Turtlebot3 + Gazebo integration (real `ROSAdapter`)
 - [ ] 6. Camera pipeline: GStreamer H264 → WebRTC
 - [ ] 7. Cloud Backend (FastAPI modules, Redis + PostgreSQL)
 - [ ] 8. WebRTC signalling
@@ -56,6 +56,22 @@ This is being implemented one milestone at a time. Each milestone is reviewed an
 - [ ] 10. Full end-to-end integration + test suite
 - [ ] 11. Final documentation pass (diagrams, API/MQTT reference, deployment & AWS migration guides)
 
+## Quick start
+
+```bash
+docker compose up -d      # builds and starts all 6 services
+docker compose ps         # check health status
+curl http://localhost:8000/health
+open http://localhost:3000     # or just visit it in a browser
+docker compose logs -f robot   # watch the robot's MQTT heartbeat
+docker compose down       # stop everything (data volumes persist)
+```
+
+No real robot behavior yet — see [Status](#status) below and [`docs/02-docker-foundations.md`](docs/02-docker-foundations.md) for exactly what does and doesn't work today.
+
 ## Status
 
-**Milestone 1 complete.** No services run yet — this milestone only lays down structure and documentation. `docker compose up` arrives in Milestone 2.
+**Milestone 5 complete.** `RealROSAdapter` replaces `MockROSAdapter` — the robot container now runs headless Gazebo with a Turtlebot3 `waffle_pi` spawned into it, and MQTT commands drive real ROS2 `/cmd_vel` → real physics → real `/odom` back into telemetry. Verified live: sending `forward` over MQTT visibly moved the simulated robot's position, with non-round velocity values proving it's genuine physics, not a formula. Three real bugs found and fixed along the way (wrong git branch, `set -u` vs. ROS2's `setup.bash`, and a missing `source /usr/share/gazebo/setup.sh` that was silently blocking Gazebo's spawn service) — see [`docs/05-ros2-integration.md`](docs/05-ros2-integration.md) for the full debugging story. No camera streaming, fleet manager, or teleop UI yet — those start with Milestones 6 and 7.
+
+
+Type this next:  Milestone 6: Camera pipeline (GStreamer H264 → WebRTC) 

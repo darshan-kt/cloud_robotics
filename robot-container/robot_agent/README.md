@@ -4,14 +4,17 @@
 
 **Deliberately ROS2-agnostic.** This package must never `import rclpy`. It depends on a `ROSAdapter` *interface* only — the real ROS2 implementation lives in [`ros_ws/`](../ros_ws/) and is injected at startup. This is what lets the agent's core logic be unit-tested without ROS2 or a robot present.
 
-**Will contain:**
-- MQTT client wrapper (connect/reconnect, publish, subscribe)
-- WebRTC client (video streaming to the browser)
-- Command dispatcher (MQTT command → `ROSAdapter.publishCmdVel()`)
-- Configuration loader (YAML + env vars)
-- Structured logging
-- Heartbeat, health monitor, watchdog thread
-- The public agent interface: `connect()`, `disconnect()`, `publishTelemetry()`, `receiveCommand()`, `publishHealth()`, `streamVideo()`, `shutdown()`, `restart()`, `heartbeat()`
-- The `ROSAdapter` abstract interface (implementation lives elsewhere)
+**Contains:**
+- `interfaces.py` — `ROSAdapter` and `MQTTClientInterface` abstract interfaces
+- `mock_ros_adapter.py` — the `ROSAdapter` that actually runs today (no ROS2 dependency); swapped for `ros_ws/`'s real one in Milestone 5
+- `mqtt_client.py` — `PahoMQTTClient` (connect/reconnect with backoff, publish, subscribe, resubscribe-on-reconnect)
+- `dispatcher.py` — `CommandDispatcher` (MQTT command → `ROSAdapter.publish_cmd_vel()`)
+- `health_server.py` — local `GET /health` / `GET /metrics` for the container orchestrator
+- `watchdog.py` — notices prolonged MQTT disconnection, triggers a restart
+- `config.py`, `logging_config.py` — YAML+env configuration, structured JSON logging
+- `agent.py` — `RobotCloudAgent`, exposing `connect()`, `disconnect()`, `publish_telemetry()`, `receive_command()`, `publish_health()`, `stream_video()`, `shutdown()`, `restart()`, `heartbeat()`
+- `main.py` — composition root; the one place concrete implementations are chosen
 
-**Filled in:** Milestone 4 (core agent, built and tested against a mock `ROSAdapter`), wired to the real adapter in Milestone 5.
+WebRTC video streaming (`stream_video()`) is present on the interface but not implemented yet — it arrives with the GStreamer/WebRTC pipeline in Milestone 6.
+
+**Filled in:** Milestone 4 — see [`docs/04-robot-agent.md`](../../docs/04-robot-agent.md). Wired to the real `ROSAdapter` in Milestone 5.
