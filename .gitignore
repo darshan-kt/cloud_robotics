@@ -1,0 +1,50 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Node / Frontend ---
+node_modules/
+dist/
+build/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+
+# --- ROS2 ---
+robot-container/ros_ws/build/
+robot-container/ros_ws/install/
+robot-container/ros_ws/log/
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- Env / secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Databases / local data ---
+*.sqlite3
+postgres-data/
+redis-data/
+mosquitto-data/
+mosquitto/data/
+mosquitto/log/
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# --- Logs ---
+*.log
+logs/
