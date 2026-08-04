@@ -29,3 +29,18 @@ class DiagnosticsData:
     cpu_percent: float
     memory_percent: float
     temperature_c: float
+
+
+@dataclass(frozen=True)
+class CameraFrame:
+    """One raw camera frame. `encoding` is the ROS2 sensor_msgs/Image encoding
+    string (e.g. "rgb8", "bgr8") - VideoStreamer needs it, along with
+    width/height, to build correct GStreamer caps. Added in Milestone 6;
+    subscribe_camera's callback type evolved from Milestone 4's placeholder
+    `Callable[[bytes], None]` once there was an actual consumer that needed
+    more than raw bytes - see docs/06-video-streaming.md."""
+
+    data: bytes
+    width: int
+    height: int
+    encoding: str

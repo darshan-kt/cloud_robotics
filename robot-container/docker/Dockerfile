@@ -7,9 +7,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     TURTLEBOT3_MODEL=waffle_pi \
     ROS_WS=/robot/ros_ws \
-    # Gazebo's camera sensor plugin renders every tick even headless (no
-    # subscriber required) and needs software rendering in a container
-    # with no GPU - without this it fails to initialize the sensor.
+    # Gazebo's own headless server rendering (world/physics) still wants
+    # software GL with no GPU in the container - unrelated to the camera.
     LIBGL_ALWAYS_SOFTWARE=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -25,6 +24,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-humble-dynamixel-sdk \
         ros-humble-xacro \
         ros-humble-robot-state-publisher \
+        # Milestone 6 (respun): a real webcam feeds /camera/image_raw
+        # (webcam_driver.py) instead of Gazebo's simulated camera sensor -
+        # see docs/06-video-streaming.md for why that sensor was dropped
+        # entirely rather than fought with further.
+        python3-opencv \
+        v4l-utils \
+        python3-gi \
+        gir1.2-gstreamer-1.0 \
+        gir1.2-gst-plugins-base-1.0 \
+        gir1.2-gst-plugins-bad-1.0 \
+        gstreamer1.0-tools \
+        gstreamer1.0-plugins-good \
+        gstreamer1.0-plugins-bad \
+        gstreamer1.0-plugins-ugly \
+        gstreamer1.0-nice \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /robot

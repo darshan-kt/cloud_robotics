@@ -1,8 +1,12 @@
 """Headless simulation launch: Gazebo server (no GUI) + a Turtlebot3
-waffle_pi spawned into the turtlebot3_world. See docs/05-ros2-integration.md
-for why this platform runs Gazebo headless by default: the operator sees
-the robot through the browser's WebRTC feed (Milestone 6), not a window on
-the server - and there is no display in AWS either.
+waffle_pi spawned into the turtlebot3_world, plus the real webcam driver
+(Milestone 6, respun - see webcam_driver.py). Gazebo drives physics/
+cmd_vel/odom; the camera feed comes from a real, locally-attached webcam
+instead of Gazebo's own simulated camera sensor, which is no longer used at
+all. See docs/05-ros2-integration.md for why this platform runs Gazebo
+headless by default: the operator sees the robot through the browser's
+WebRTC feed, not a window on the server - and there is no display in AWS
+either.
 
 Deliberately does NOT reuse turtlebot3_gazebo's own turtlebot3_world.launch.py
 as-is, since that one also starts gzclient (the GUI) - rather than hope a
@@ -20,6 +24,7 @@ from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
 
 
 def generate_launch_description():
@@ -53,8 +58,21 @@ def generate_launch_description():
         launch_arguments={"x_pose": x_pose, "y_pose": y_pose}.items(),
     )
 
+    # Real webcam -> /camera/image_raw (Milestone 6, respun). Configured via
+    # env vars (CAMERA_DEVICE/CAMERA_WIDTH/CAMERA_HEIGHT/CAMERA_FPS/
+    # CAMERA_TEST_PATTERN_FALLBACK), the same convention robot_agent's own
+    # config.py uses, rather than ROS parameters - see webcam_driver.py and
+    # docs/06-video-streaming.md.
+    webcam_driver_cmd = Node(
+        package="robot_cloud_bridge",
+        executable="webcam_driver",
+        name="webcam_driver",
+        output="screen",
+    )
+
     ld = LaunchDescription()
     ld.add_action(gzserver_cmd)
     ld.add_action(robot_state_publisher_cmd)
     ld.add_action(spawn_turtlebot3_cmd)
+    ld.add_action(webcam_driver_cmd)
     return ld

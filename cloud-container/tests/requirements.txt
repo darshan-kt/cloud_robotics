@@ -1,4 +1,19 @@
 # Test-only dependencies - deliberately separate from backend/requirements.txt
-# so pytest/paho-mqtt never end up in the production backend image.
+# so pytest and friends never end up in the production backend image.
 pytest==8.3.3
+pytest-asyncio==0.24.0
 paho-mqtt==1.6.1
+# Milestone 7: live integration tests against Postgres/Redis, and an
+# end-to-end HTTP/WebSocket check against the real running backend - see
+# test_registry_and_sessions_live.py and test_api_live.py.
+asyncpg==0.29.0
+redis==5.0.8
+httpx==0.27.2
+websockets==13.1
+# Milestone 10: real-browser end-to-end tests against the actual frontend
+# (test_frontend_e2e.py) - uses a REAL, locally-installed Chrome via
+# channel="chrome" (see docs/09-frontend.md for why "real browser" has
+# mattered concretely in this project, not just as a testing preference),
+# so this does NOT also need `playwright install` to download bundled
+# browser binaries - only the Python package itself.
+playwright==1.61.0

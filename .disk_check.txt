@@ -1,0 +1,3 @@
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p8  109G  105G     0 100% /
+4.0K	/tmp/claude-1000/-home-darshan-cloud-robotics/5b192469-425b-47ce-895b-329feac3ef38/tasks

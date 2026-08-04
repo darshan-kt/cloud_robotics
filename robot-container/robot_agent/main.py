@@ -5,7 +5,15 @@ As of Milestone 5, this injects the real ROS2-backed adapter
 (robot_cloud_bridge.real_ros_adapter.RealROSAdapter) instead of
 mock_ros_adapter.MockROSAdapter - exactly the one-line-of-intent swap
 Milestone 4's docs promised. Nothing in agent.py changed to make this work.
-See docs/04-robot-agent.md and docs/05-ros2-integration.md.
+
+As of Milestone 6, this also constructs VideoStreamer. Milestone 6-8 used a
+TEMPORARY DevSignallingServer (a throwaway HTTP endpoint) to negotiate
+WebRTC while real signalling didn't exist yet; Milestone 8 deleted it -
+signalling is now MQTT-mediated through the backend, handled directly by
+RobotCloudAgent (see agent.py's _on_camera_offer) with no separate server
+needed on the robot side at all.
+See docs/04-robot-agent.md, docs/05-ros2-integration.md,
+docs/06-video-streaming.md, docs/08-webrtc-signalling.md.
 """
 import asyncio
 import logging
@@ -16,6 +24,7 @@ from robot_agent.config import load_config
 from robot_agent.health_server import HealthServer
 from robot_agent.logging_config import configure_logging
 from robot_agent.mqtt_client import PahoMQTTClient
+from robot_agent.video_streamer import VideoStreamer
 from robot_cloud_bridge.real_ros_adapter import RealROSAdapter
 
 
@@ -36,11 +45,21 @@ async def run() -> None:
     ros_adapter = RealROSAdapter(robot_id=config.robot_id)
     ros_adapter.start()
 
+    video_streamer = VideoStreamer(
+        bitrate_kbps=config.video.bitrate_kbps,
+        framerate=config.video.framerate,
+        keyframe_interval=config.video.keyframe_interval,
+        stun_server=config.video.stun_server,
+        turn_server=config.video.turn_server,
+    )
+    video_streamer.start()
+
     agent = RobotCloudAgent(
         robot_id=config.robot_id,
         mqtt_client=mqtt_client,
         ros_adapter=ros_adapter,
         config=config,
+        video_streamer=video_streamer,
     )
 
     health_server = HealthServer(
@@ -61,6 +80,7 @@ async def run() -> None:
     finally:
         await agent.shutdown()
         health_server.stop()
+        video_streamer.stop()
         ros_adapter.stop()
         logger.info("Robot Cloud Agent stopped")
 

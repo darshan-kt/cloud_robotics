@@ -1,0 +1,21 @@
+# Optional compose override that passes a REAL webcam device through to the
+# robot container. NOT applied by default - `docker compose up` alone must
+# keep working on machines with no webcam attached at all (see
+# CAMERA_TEST_PATTERN_FALLBACK in .env.example for dev/CI boxes without one).
+#
+# To run against your laptop's actual webcam:
+#
+#   cp .env.example .env   # if you haven't already
+#   docker compose -f docker-compose.yml -f docker-compose.camera.yml up -d --build
+#
+# CAMERA_DEVICE (default /dev/video0) must exist on the HOST - list yours
+# with `v4l2-ctl --list-devices` or `ls /dev/video*`. See
+# docs/06-video-streaming.md.
+services:
+  robot:
+    devices:
+      - "${CAMERA_DEVICE:-/dev/video0}:${CAMERA_DEVICE:-/dev/video0}"
+    # /dev/video* is typically group-owned by "video" on the host - add the
+    # container's process to that group rather than running --privileged.
+    group_add:
+      - video

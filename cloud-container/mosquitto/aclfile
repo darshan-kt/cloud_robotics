@@ -7,12 +7,23 @@
 # Explicitly NOT granted write on telemetry/health/status/heartbeat - a
 # compromised backend should not be able to impersonate a robot's own
 # reported state, only issue commands and read what robots report.
+#
+# camera/offer + camera/answer (Milestone 8): WebRTC signalling only
+# (SDP/ICE), never video bytes - see docs/08-webrtc-signalling.md. Split
+# into two directional sub-topics because signalling is genuinely
+# bidirectional (a browser's offer has to reach the robot somehow), unlike
+# telemetry/health/status/heartbeat, which are always robot-originated.
+# Backend writing camera/offer is NOT the same risk as backend writing
+# telemetry: an offer isn't a robot self-report a backend could impersonate,
+# it's a negotiation the backend legitimately initiates on an operator's
+# behalf - the same category as `cmd`, not the same category as `status`.
 user backend
 topic readwrite robots/+/cmd
 topic read robots/+/telemetry
 topic read robots/+/health
 topic read robots/+/status
-topic read robots/+/camera
+topic write robots/+/camera/offer
+topic read robots/+/camera/answer
 topic read robots/+/heartbeat
 
 # --- robots: one rule set for every robot, no per-robot editing ---
@@ -26,5 +37,6 @@ pattern read robots/%u/cmd
 pattern write robots/%u/telemetry
 pattern write robots/%u/health
 pattern write robots/%u/status
-pattern write robots/%u/camera
+pattern read robots/%u/camera/offer
+pattern write robots/%u/camera/answer
 pattern write robots/%u/heartbeat

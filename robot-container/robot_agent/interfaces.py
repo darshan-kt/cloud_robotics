@@ -15,7 +15,7 @@ see robot-container/tests/fake_mqtt_client.py.
 from abc import ABC, abstractmethod
 from typing import Callable
 
-from robot_agent.models import BatteryState, DiagnosticsData, OdometryData
+from robot_agent.models import BatteryState, CameraFrame, DiagnosticsData, OdometryData
 
 
 class ROSAdapter(ABC):
@@ -24,8 +24,8 @@ class ROSAdapter(ABC):
         """Send a velocity command to the robot."""
 
     @abstractmethod
-    def subscribe_camera(self, callback: Callable[[bytes], None]) -> None:
-        """Register a callback for raw camera frames."""
+    def subscribe_camera(self, callback: Callable[[CameraFrame], None]) -> None:
+        """Register a callback fired for every raw camera frame."""
 
     @abstractmethod
     def subscribe_odometry(self, callback: Callable[[OdometryData], None]) -> None:

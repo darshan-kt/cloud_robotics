@@ -22,6 +22,9 @@
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>xacro</exec_depend>
   <exec_depend>turtlebot3_gazebo</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <!-- webcam_driver.py: real V4L2 webcam -> /camera/image_raw (Milestone 6, respun) -->
+  <exec_depend>python3-opencv</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

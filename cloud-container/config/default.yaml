@@ -7,6 +7,8 @@ log_level: INFO
 
 mqtt_host: mosquitto
 mqtt_port: 1883
+mqtt_backend_username: backend
+mqtt_backend_password: backend_dev_password
 
 redis_host: redis
 redis_port: 6379
@@ -18,3 +20,13 @@ postgres_user: robotics
 postgres_password: robotics_dev_password
 
 backend_port: 8000
+
+# --- auth/ (Milestone 7) ---
+operator_username: operator
+operator_password: operator_dev_password
+jwt_secret: dev-only-insecure-secret-change-me
+jwt_algorithm: HS256
+jwt_expiry_seconds: 3600
+
+# --- sessions/ (Milestone 7) ---
+session_ttl_seconds: 30

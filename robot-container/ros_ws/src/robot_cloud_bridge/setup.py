@@ -25,6 +25,10 @@ setup(
     license="Apache-2.0",
     tests_require=["pytest"],
     entry_points={
-        "console_scripts": [],
+        "console_scripts": [
+            # Milestone 6 (respun): real webcam -> /camera/image_raw,
+            # launched by simulation.launch.py. See webcam_driver.py.
+            "webcam_driver = robot_cloud_bridge.webcam_driver:main",
+        ],
     },
 )

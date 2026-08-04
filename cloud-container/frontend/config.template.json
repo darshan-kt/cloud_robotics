@@ -1,3 +1,6 @@
 {
-  "apiBaseUrl": "${API_BASE_URL}"
+  "apiBaseUrl": "${API_BASE_URL}",
+  "turnUrl": "${TURN_URL}",
+  "turnUsername": "${TURN_USERNAME}",
+  "turnCredential": "${TURN_CREDENTIAL}"
 }

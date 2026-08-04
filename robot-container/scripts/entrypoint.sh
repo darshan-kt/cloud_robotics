@@ -21,6 +21,12 @@ source /robot/ros_ws/install/setup.bash
 # shellcheck source=/usr/share/gazebo/setup.sh
 source /usr/share/gazebo/setup.sh
 
+# Milestone 6 (respun): camera frames come from a real webcam via
+# webcam_driver.py (launched by simulation.launch.py below), not Gazebo's
+# simulated camera sensor - so there's no longer any need to give Gazebo a
+# real render context (Xvfb) just to light up its CameraSensor. Gazebo
+# still drives physics/cmd_vel/odom as in Milestone 5, which never needed a
+# display in the first place. See docs/06-video-streaming.md.
 echo "Starting headless Gazebo + Turtlebot3 (${TURTLEBOT3_MODEL}) simulation..."
 ros2 launch robot_cloud_bridge simulation.launch.py &
 

@@ -44,13 +44,19 @@ services:
       start_period: 5s
     restart: unless-stopped
 
-  # --- Redis: not yet used by the backend (arrives Milestone 7), started
-  #     and health-checked now so the full stack topology is real from day one ---
+  # --- Redis: session locks + live fleet state (Milestone 7) - see
+  #     backend/app/db/redis.py and docs/07-cloud-backend.md ---
   redis:
     image: redis:7-alpine
     container_name: cloud-robotics-redis
     networks:
       - cloud-robotics-net
+    # Published for local dev/debugging convenience (redis-cli, the live
+    # integration tests in cloud-container/tests/) - the backend itself
+    # always reaches it over the internal network by service name, never
+    # through this host-published port. Same tradeoff as BACKEND_PORT.
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -60,12 +66,16 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # --- PostgreSQL: same story as Redis - present, healthy, unused until Milestone 7 ---
+  # --- PostgreSQL: durable robot registry + session audit log (Milestone 7) -
+  #     see backend/app/db/postgres.py and docs/07-cloud-backend.md ---
   postgres:
     image: postgres:16-alpine
     container_name: cloud-robotics-postgres
     networks:
       - cloud-robotics-net
+    # Same reasoning as redis's port above.
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-cloud_robotics}
       POSTGRES_USER: ${POSTGRES_USER:-robotics}
@@ -77,6 +87,41 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  # --- coturn: TURN relay for WebRTC (Milestone 9). STUN alone (the robot's
+  #     existing stun_server) isn't enough here: Chrome hides its OWN local
+  #     ICE candidates behind random mDNS ".local" hostnames by default (a
+  #     privacy feature, not a bug), and this project's GStreamer/libnice-
+  #     based robot side has no way to resolve those - confirmed by direct
+  #     SDP inspection while verifying this milestone, see
+  #     docs/09-frontend.md. A TURN relay candidate is a real, unobfuscated
+  #     address on both ends regardless of mDNS - and it's also exactly
+  #     what a real robot behind a NAT/firewall would need in an actual AWS
+  #     deployment, so this isn't a dev-only workaround.
+  #
+  #     network_mode: host (not the cloud-robotics-net bridge every other
+  #     service uses) because TURN relay allocations need a real, directly
+  #     reachable address on a wide UDP port range - trying to publish that
+  #     whole range through Docker's per-port bridge NAT would defeat the
+  #     point. The browser reaches it at localhost; the robot container
+  #     reaches it via extra_hosts' host-gateway (see the robot service
+  #     below) - both resolve to this same host-networked process.
+  coturn:
+    image: coturn/coturn:4.6-alpine
+    container_name: cloud-robotics-coturn
+    network_mode: host
+    command:
+      - "-n"
+      - "--lt-cred-mech"
+      - "--realm=cloud-robotics.local"
+      - "--user=${TURN_USERNAME:-turnuser}:${TURN_PASSWORD:-turn_dev_password}"
+      - "--listening-port=${TURN_PORT:-3478}"
+      - "--min-port=${TURN_MIN_PORT:-49160}"
+      - "--max-port=${TURN_MAX_PORT:-49200}"
+      - "--no-cli"
+      - "--no-tls"
+      - "--no-dtls"
     restart: unless-stopped
 
   # --- FastAPI backend: never talks to ROS2, only MQTT/Redis/Postgres ---
@@ -93,6 +138,10 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       MQTT_HOST: ${MQTT_HOST:-mosquitto}
       MQTT_PORT: ${MQTT_PORT:-1883}
+      # The backend's own MQTT identity (see cloud-container/mosquitto/aclfile) -
+      # readwrite on robots/+/cmd, read-only on everything else.
+      MQTT_BACKEND_USERNAME: ${MQTT_BACKEND_USERNAME:-backend}
+      MQTT_BACKEND_PASSWORD: ${MQTT_BACKEND_PASSWORD:-backend_dev_password}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
@@ -101,6 +150,13 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-robotics}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-robotics_dev_password}
       BACKEND_PORT: ${BACKEND_PORT:-8000}
+      # --- auth/ + sessions/ (Milestone 7) ---
+      OPERATOR_USERNAME: ${OPERATOR_USERNAME:-operator}
+      OPERATOR_PASSWORD: ${OPERATOR_PASSWORD:-operator_dev_password}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret-change-me}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_EXPIRY_SECONDS: ${JWT_EXPIRY_SECONDS:-3600}
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-30}
     # Dev convenience: bind-mount source + add --reload. The image itself
     # (Dockerfile CMD) runs without --reload, which is what actually ships.
     volumes:
@@ -133,15 +189,27 @@ services:
       # Both must be a BROWSER-reachable address, never the internal service name.
       VITE_API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
       API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
+      # Same dev/prod split, for the browser's RTCPeerConnection ICE
+      # servers - see coturn above and src/hooks/useWebRTCVideo.ts. Also a
+      # BROWSER-reachable address (TURN_HOST defaults to localhost, same
+      # reasoning as API_BASE_URL above).
+      VITE_TURN_URL: turn:${TURN_HOST:-localhost}:${TURN_PORT:-3478}
+      VITE_TURN_USERNAME: ${TURN_USERNAME:-turnuser}
+      VITE_TURN_CREDENTIAL: ${TURN_PASSWORD:-turn_dev_password}
+      TURN_URL: turn:${TURN_HOST:-localhost}:${TURN_PORT:-3478}
+      TURN_USERNAME: ${TURN_USERNAME:-turnuser}
+      TURN_CREDENTIAL: ${TURN_PASSWORD:-turn_dev_password}
     volumes:
       - ./cloud-container/frontend/src:/app/src
       - ./cloud-container/frontend/index.html:/app/index.html
     depends_on:
       - backend
+      - coturn
     restart: unless-stopped
 
   # --- Robot: ROS2 Humble base image running the real Robot Cloud Agent
-  #     (Milestone 4) against a MockROSAdapter - real ROS2 arrives Milestone 5 ---
+  #     against real ROS2/Gazebo (Milestone 5) with GStreamer/WebRTC video
+  #     (Milestone 6) - see docs/06-video-streaming.md ---
   robot:
     build:
       context: ./robot-container
@@ -151,6 +219,12 @@ services:
       - cloud-robotics-net
     ports:
       - "${ROBOT_HEALTH_PORT:-8080}:8080"
+    # coturn runs with network_mode: host (see above), so it isn't
+    # reachable by its container name on cloud-robotics-net - this maps
+    # host.docker.internal to the real host's IP so TURN_SERVER_URL below
+    # can reach it. Requires Docker 20.10+ (host-gateway support).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       ROBOT_ID: ${ROBOT_ID:-turtlebot3_01}
       MQTT_HOST: ${MQTT_HOST:-mosquitto}
@@ -159,7 +233,32 @@ services:
       MQTT_ROBOT_PASSWORD: ${MQTT_ROBOT_PASSWORD:-robot_dev_password}
       ROBOT_HEALTH_PORT: ${ROBOT_HEALTH_PORT:-8080}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Real webcam -> /camera/image_raw (webcam_driver.py, Milestone 6
+      # respun) - see docs/06-video-streaming.md. The device itself is NOT
+      # passed through by default (this file must build/run on machines
+      # with no webcam at all) - see docker-compose.camera.yml to opt in.
+      CAMERA_DEVICE: ${CAMERA_DEVICE:-/dev/video0}
+      CAMERA_WIDTH: ${CAMERA_WIDTH:-640}
+      CAMERA_HEIGHT: ${CAMERA_HEIGHT:-480}
+      CAMERA_FPS: ${CAMERA_FPS:-15}
+      CAMERA_TEST_PATTERN_FALLBACK: ${CAMERA_TEST_PATTERN_FALLBACK:-false}
+      # See coturn service above and docs/09-frontend.md for why this
+      # exists alongside plain STUN.
+      TURN_SERVER_URL: turn://${TURN_USERNAME:-turnuser}:${TURN_PASSWORD:-turn_dev_password}@host.docker.internal:${TURN_PORT:-3478}
     depends_on:
+      coturn:
+        condition: service_started
       mosquitto:
         condition: service_healthy
     restart: unless-stopped
+    # Gazebo + ROS2 + GStreamer/x264 in one container is heavy, and an
+    # unbounded container can exhaust a small dev host's RAM badly enough
+    # to freeze the whole machine (swap thrashing), not just get OOM-killed
+    # cleanly - observed directly on this project's own dev machine (7.6GiB
+    # RAM). These caps are a deliberately conservative safety net, not a
+    # tuned production value - raise them if your host has more headroom.
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 3.5G

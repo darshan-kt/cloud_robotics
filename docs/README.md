@@ -18,11 +18,17 @@ Each doc follows the same three-part shape:
 | 03 | [The MQTT Layer](03-mqtt-layer.md) | 3 — MQTT layer | ✅ |
 | 04 | [The Robot Cloud Agent](04-robot-agent.md) | 4 — Robot Cloud Agent core | ✅ |
 | 05 | [ROS2 & Turtlebot3 Integration](05-ros2-integration.md) | 5 — ROS2 + Gazebo | ✅ |
-| 06 | Video Streaming (GStreamer + WebRTC) | 6 — Camera pipeline | ⏳ |
-| 07 | The Cloud Backend | 7 — FastAPI backend | ⏳ |
-| 08 | WebRTC Signalling | 8 — Signalling | ⏳ |
-| 09 | The Frontend | 9 — React frontend | ⏳ |
-| 10 | Testing Strategy | 10 — Integration + tests | ⏳ |
-| 11 | AWS Migration Guide | 11 — Final docs pass | ⏳ |
+| 06 | [Video Streaming (GStreamer + WebRTC)](06-video-streaming.md) | 6 — Camera pipeline | ✅ |
+| 07 | [The Cloud Backend](07-cloud-backend.md) | 7 — FastAPI backend | ✅ |
+| 08 | [WebRTC Signalling](08-webrtc-signalling.md) | 8 — Signalling | ✅ |
+| 09 | [The Frontend](09-frontend.md) | 9 — React frontend | ✅ |
+| 10 | [Testing Strategy](10-testing-strategy.md) | 10 — Integration + tests | ✅ |
+| 11 | [AWS Migration Guide](11-aws-migration.md) | 11 — Final docs pass | ✅ |
+
+## Reference material
+
+Not part of the reading order above — for looking something up, not reading start to finish:
+
+- [API & MQTT Reference](api-reference.md) — every REST endpoint, WebSocket message shape, and MQTT topic in one place, pulled directly from the current code.
 
 Root-level architecture, folder layout, and deployment references also live at the top of the repo — see the main [`README.md`](../README.md) for the roadmap checklist.

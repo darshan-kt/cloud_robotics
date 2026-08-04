@@ -23,6 +23,12 @@ class Settings(BaseModel):
 
     mqtt_host: str = "mosquitto"
     mqtt_port: int = 1883
+    # The backend's own MQTT identity (see cloud-container/mosquitto/aclfile)
+    # - readwrite on robots/+/cmd, read-only on everything else. Never
+    # granted write on telemetry/health/status - see docs/03-mqtt-layer.md
+    # for why that boundary is enforced by the broker, not just convention.
+    mqtt_backend_username: str = "backend"
+    mqtt_backend_password: str = "backend_dev_password"
 
     redis_host: str = "redis"
     redis_port: int = 6379
@@ -34,6 +40,30 @@ class Settings(BaseModel):
     postgres_password: str = "robotics_dev_password"
 
     backend_port: int = 8000
+
+    # --- auth/ (Milestone 7): JWT-based operator sessions ---
+    # Exactly one operator credential, from env - the same "one shared
+    # dev credential, real per-identity auth is a later concern" shape as
+    # MQTT's own backend/robot credentials (see docs/03-mqtt-layer.md).
+    # AWS migration story: this becomes Cognito, same as MQTT's becomes
+    # IoT Core certificates - see docs/00-overview.md's migration table.
+    operator_username: str = "operator"
+    operator_password: str = "operator_dev_password"
+    # HS256 shared secret. The dev default is intentionally obvious so
+    # nobody mistakes it for something safe to ship - see docs/07-cloud-backend.md.
+    jwt_secret: str = "dev-only-insecure-secret-change-me"
+    jwt_algorithm: str = "HS256"
+    jwt_expiry_seconds: int = 3600
+
+    # --- sessions/ (Milestone 7): exclusive robot-control locks ---
+    # How long an operator's exclusive control session survives with no
+    # renewal (a teleop command or a WS ping) before Redis expires the key
+    # automatically and another operator can acquire it - the session-layer
+    # equivalent of the robot's own MQTT Last-Will-and-Testament: a clean
+    # release is immediate, an unclean one (browser tab closed, network
+    # drop) is bounded by this TTL instead of hanging forever. See
+    # docs/07-cloud-backend.md.
+    session_ttl_seconds: int = 30
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:

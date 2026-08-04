@@ -25,7 +25,8 @@ Look at `aclfile`:
 pattern write robots/%u/telemetry
 pattern write robots/%u/health
 pattern write robots/%u/status
-pattern write robots/%u/camera
+pattern read  robots/%u/camera/offer
+pattern write robots/%u/camera/answer
 pattern write robots/%u/heartbeat
 pattern read  robots/%u/cmd
 ```
@@ -66,10 +67,11 @@ So: clean shutdown → the script publishes `offline` itself. Unclean death → 
 | `robots/{id}/telemetry` | robot → backend | 0 | no | velocity, position, battery, etc. (finalized in Milestone 4) |
 | `robots/{id}/health` | robot → backend | 1 | no | CPU/memory/diagnostics (finalized in Milestone 4) |
 | `robots/{id}/status` | robot → backend | 1 | **yes** | `{"robot_id", "status": "online"\|"offline", "timestamp"}` |
-| `robots/{id}/camera` | robot → backend | — | no | WebRTC **signalling** only (SDP/ICE) — never video bytes, see [00-overview.md](00-overview.md) |
+| `robots/{id}/camera/offer` | backend → robot | 1 | no | WebRTC **signalling** only (SDP) — never video bytes, see [00-overview.md](00-overview.md). `{"request_id", "sdp"}` — finalized in [Milestone 8](08-webrtc-signalling.md), which split the single `camera` topic this doc originally sketched into this and the row below, once signalling turned out to need both directions. |
+| `robots/{id}/camera/answer` | robot → backend | 1 | no | `{"request_id", "sdp"}` — `request_id` echoes the offer's, since MQTT itself has no request/response correlation - see [08-webrtc-signalling.md](08-webrtc-signalling.md). |
 | `robots/{id}/heartbeat` | robot → backend | 0 | no | `{"robot_id", "timestamp", "status"}` |
 
-QoS choices: `cmd`, `health`, and `status` use QoS 1 (at-least-once — a dropped stop command or a missed offline notice both matter). `telemetry` and `heartbeat` use QoS 0 (fire-and-forget — they repeat frequently enough that losing one occasionally is harmless, and QoS 0 has the lowest overhead).
+QoS choices: `cmd`, `health`, `status`, and both `camera/*` topics use QoS 1 (at-least-once — a dropped stop command, a missed offline notice, or a lost SDP offer/answer all matter). `telemetry` and `heartbeat` use QoS 0 (fire-and-forget — they repeat frequently enough that losing one occasionally is harmless, and QoS 0 has the lowest overhead).
 
 `cmd`'s payload is deliberately a *discrete command name*, not a raw `Twist` (linear/angular velocity). Converting `"forward"` into an actual ROS2 velocity command is explicitly the Robot Cloud Agent's job (Milestone 4) — the wire format stays a stable, simple contract regardless of how that conversion logic evolves later.
 

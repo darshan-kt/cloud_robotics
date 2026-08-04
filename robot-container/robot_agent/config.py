@@ -46,6 +46,26 @@ class HealthServerConfig:
 
 
 @dataclass
+class VideoConfig:
+    bitrate_kbps: int = 1000
+    framerate: int = 15
+    keyframe_interval: int = 30
+    stun_server: str = "stun://stun.l.google.com:19302"
+    # Empty by default - TURN is opt-in via TURN_SERVER_URL (see
+    # docker-compose.yml's coturn service). Needed for real ICE
+    # connectivity against a Chrome browser: Chrome hides its own local
+    # candidates behind random mDNS ".local" hostnames by default (a
+    # privacy feature, not a bug) that this project's GStreamer/libnice
+    # ICE stack has no way to resolve - confirmed by direct SDP inspection
+    # while verifying Milestone 9's frontend. A TURN relay candidate is a
+    # real, unobfuscated address on both ends regardless of mDNS, and is
+    # also exactly what a real robot behind a NAT/firewall would need in
+    # an actual AWS deployment - not a dev-only workaround. See
+    # docs/09-frontend.md.
+    turn_server: str = ""
+
+
+@dataclass
 class AgentConfig:
     robot_id: str = "turtlebot3_01"
     log_level: str = "INFO"
@@ -53,6 +73,7 @@ class AgentConfig:
     intervals: IntervalsConfig = field(default_factory=IntervalsConfig)
     motion: MotionConfig = field(default_factory=MotionConfig)
     health_server: HealthServerConfig = field(default_factory=HealthServerConfig)
+    video: VideoConfig = field(default_factory=VideoConfig)
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -68,6 +89,7 @@ def load_config() -> AgentConfig:
     intervals_yaml = yaml_data.get("intervals", {})
     motion_yaml = yaml_data.get("motion", {})
     health_yaml = yaml_data.get("health_server", {})
+    video_yaml = yaml_data.get("video", {})
 
     mqtt_password = os.environ.get("MQTT_ROBOT_PASSWORD")
     if not mqtt_password:
@@ -100,5 +122,12 @@ def load_config() -> AgentConfig:
         ),
         health_server=HealthServerConfig(
             port=int(os.environ.get("ROBOT_HEALTH_PORT", health_yaml.get("port", 8080))),
+        ),
+        video=VideoConfig(
+            bitrate_kbps=int(video_yaml.get("bitrate_kbps", 1000)),
+            framerate=int(video_yaml.get("framerate", 15)),
+            keyframe_interval=int(video_yaml.get("keyframe_interval", 30)),
+            stun_server=video_yaml.get("stun_server", "stun://stun.l.google.com:19302"),
+            turn_server=os.environ.get("TURN_SERVER_URL", video_yaml.get("turn_server", "")),
         ),
     )

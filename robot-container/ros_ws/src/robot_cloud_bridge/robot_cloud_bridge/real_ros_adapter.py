@@ -8,12 +8,14 @@ mock_ros_adapter.py's MockROSAdapter - which is why swapping one for the
 other in main.py requires zero changes anywhere else. See
 docs/04-robot-agent.md and docs/05-ros2-integration.md.
 
-Scope for this milestone (see docs/05-ros2-integration.md for why): only
-publish_cmd_vel (-> /cmd_vel) and subscribe_odometry (<- /odom) are real
-ROS2 data paths. subscribe_camera/subscribe_battery/subscribe_diagnostics
-are honest logged stubs, same pattern as MockROSAdapter's own camera stub -
-camera activates in Milestone 6, and Turtlebot3's Gazebo stack has no real
-battery/diagnostics topics to bridge in the first place.
+As of Milestone 6, subscribe_camera() is also real: /camera/image_raw feeds
+VideoStreamer's GStreamer pipeline via agent.py. That topic's publisher is
+webcam_driver.py (a real, locally-attached webcam), not Gazebo's simulated
+camera sensor - this adapter doesn't know or care which one is publishing,
+same as it's always been agnostic about what feeds /odom. See
+docs/06-video-streaming.md. subscribe_battery/subscribe_diagnostics remain
+honest logged stubs - Turtlebot3's Gazebo stack has no real topics to
+bridge for either, see docs/05-ros2-integration.md.
 """
 import logging
 import math
@@ -25,9 +27,10 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
+from sensor_msgs.msg import Image
 
 from robot_agent.interfaces import ROSAdapter
-from robot_agent.models import BatteryState, DiagnosticsData, OdometryData
+from robot_agent.models import BatteryState, CameraFrame, DiagnosticsData, OdometryData
 
 
 def _yaw_from_quaternion(x: float, y: float, z: float, w: float) -> float:
@@ -46,6 +49,7 @@ class RealROSAdapter(ROSAdapter):
         self._odometry_callback: Optional[Callable[[OdometryData], None]] = None
         self._diagnostics_callback: Optional[Callable[[DiagnosticsData], None]] = None
         self._battery_callback: Optional[Callable[[BatteryState], None]] = None
+        self._camera_callback: Optional[Callable[[CameraFrame], None]] = None
 
         self._node: Optional[Node] = None
         self._executor: Optional[SingleThreadedExecutor] = None
@@ -58,13 +62,18 @@ class RealROSAdapter(ROSAdapter):
 
         self._cmd_vel_publisher = self._node.create_publisher(Twist, "/cmd_vel", 10)
         self._node.create_subscription(Odometry, "/odom", self._handle_odometry, 10)
+        # depth=1: always process the latest camera frame, never build up a
+        # backlog of stale ones if VideoStreamer falls behind for a moment.
+        self._node.create_subscription(Image, "/camera/image_raw", self._handle_camera_image, 1)
 
         self._executor = SingleThreadedExecutor()
         self._executor.add_node(self._node)
         self._spin_thread = threading.Thread(target=self._executor.spin, daemon=True, name="ros2-spin")
         self._spin_thread.start()
 
-        self._logger.info(f"RealROSAdapter started - publishing /cmd_vel, subscribed to /odom")
+        self._logger.info(
+            "RealROSAdapter started - publishing /cmd_vel, subscribed to /odom and /camera/image_raw"
+        )
 
     def stop(self) -> None:
         if self._executor:
@@ -82,12 +91,8 @@ class RealROSAdapter(ROSAdapter):
         msg.angular.z = angular
         self._cmd_vel_publisher.publish(msg)
 
-    def subscribe_camera(self, callback: Callable[[bytes], None]) -> None:
-        self._logger.info(
-            "subscribe_camera() not wired up yet - the camera topic exists on the "
-            "waffle_pi model, but nothing consumes it until the GStreamer/WebRTC "
-            "pipeline arrives in Milestone 6"
-        )
+    def subscribe_camera(self, callback: Callable[[CameraFrame], None]) -> None:
+        self._camera_callback = callback
 
     def subscribe_odometry(self, callback: Callable[[OdometryData], None]) -> None:
         self._odometry_callback = callback
@@ -104,7 +109,19 @@ class RealROSAdapter(ROSAdapter):
             "stack doesn't model battery state - battery_percentage will report null"
         )
 
-    # --- rclpy callback (runs on the executor's spin thread) ---
+    # --- rclpy callbacks (run on the executor's spin thread) ---
+    def _handle_camera_image(self, msg: Image) -> None:
+        if not self._camera_callback:
+            return
+        self._camera_callback(
+            CameraFrame(
+                data=bytes(msg.data),
+                width=msg.width,
+                height=msg.height,
+                encoding=msg.encoding,
+            )
+        )
+
     def _handle_odometry(self, msg: Odometry) -> None:
         if not self._odometry_callback:
             return

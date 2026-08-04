@@ -6,6 +6,42 @@ Before any code, this doc lays out the *shape* of the system we're building: a c
 
 There are two independent data paths through the system. Keeping them separate, both conceptually and in the code, is the single most important architectural decision in this project.
 
+### The system as a whole
+
+```mermaid
+flowchart LR
+    subgraph Browser["Browser (Operator)"]
+        UI["React Console"]
+    end
+
+    subgraph Cloud["cloud-container"]
+        BE["FastAPI Backend"]
+        MQ["Mosquitto (MQTT)"]
+        RD[("Redis")]
+        PG[("PostgreSQL")]
+        TURN["coturn (TURN/STUN)"]
+    end
+
+    subgraph Robot["robot-container"]
+        RA["Robot Cloud Agent"]
+        ROS["ROS2 / Gazebo / Turtlebot3"]
+        VS["GStreamer webrtcbin"]
+    end
+
+    UI -- "HTTPS + WSS (auth, commands, status)" --> BE
+    BE -- "MQTT (commands, telemetry, signalling)" --> MQ
+    MQ -- "MQTT" --> RA
+    BE --> RD
+    BE --> PG
+    RA --> ROS
+    RA --> VS
+    UI -. "ICE relay" .-> TURN
+    VS -. "ICE relay" .-> TURN
+    VS == "DTLS-SRTP media (H264), never touches BE" ==> UI
+```
+
+Every arrow into `cloud-robotics-net` (the `BE`/`MQ`/`RD`/`PG`/`TURN` box) or `robot-container` is exactly the boundary [`docs/01-repository-structure.md`](01-repository-structure.md) draws between the two containers - nothing crosses it except MQTT and the WebRTC media path, and the media path never passes through `BE` at all. See [`docs/api-reference.md`](api-reference.md) for the concrete contract behind every one of these arrows.
+
 ### Path 1 — Commands and telemetry (the "control plane")
 
 ```
@@ -14,6 +50,25 @@ Browser → React → FastAPI → MQTT → Robot Cloud Agent → ROS2 → Turtle
 
 The operator clicks an arrow button (or presses an arrow key). That intent travels all the way down to a ROS2 `Twist` message that makes the robot's wheels turn — and telemetry (battery, odometry, health) travels back up the same chain in reverse.
 
+```mermaid
+sequenceDiagram
+    participant Op as Operator (Browser)
+    participant BE as FastAPI Backend
+    participant MQ as Mosquitto
+    participant RA as Robot Cloud Agent
+    participant ROS as ROS2 / Turtlebot3
+
+    Op->>BE: WS {"command":"forward"} (/ws/teleop) or POST /control
+    BE->>BE: require_holder() + renew() session
+    BE->>MQ: publish robots/{id}/cmd (QoS 1)
+    MQ->>RA: deliver robots/{id}/cmd
+    RA->>ROS: publish /cmd_vel (Twist)
+    ROS-->>RA: /odom, /battery, /diagnostics
+    RA->>MQ: publish telemetry / health (periodic)
+    MQ->>BE: deliver telemetry / health
+    BE-->>Op: /ws/status push (every 2s)
+```
+
 ### Path 2 — Video (the "media plane")
 
 ```
@@ -21,6 +76,32 @@ Camera → ROS2 → GStreamer → WebRTC → Browser
 ```
 
 Video does **not** travel through MQTT or through FastAPI's request path. It's a separate, direct, low-latency peer connection from the robot to the browser. FastAPI's only role in video is *signalling* — introducing the two sides to each other — never touching the video bytes themselves.
+
+```mermaid
+sequenceDiagram
+    participant Op as Operator (Browser)
+    participant BE as FastAPI Backend
+    participant MQ as Mosquitto
+    participant RA as Robot Cloud Agent
+    participant VS as GStreamer webrtcbin
+    participant TURN as coturn
+
+    Op->>Op: new RTCPeerConnection(), createOffer()
+    Op->>BE: POST /robots/{id}/webrtc/offer {sdp}
+    BE->>MQ: publish robots/{id}/camera/offer {request_id, sdp}
+    MQ->>RA: deliver camera/offer
+    RA->>VS: handle_offer(sdp) - a fresh webrtcbin per offer
+    VS-->>RA: answer sdp (after ICE gathering completes)
+    RA->>MQ: publish robots/{id}/camera/answer {request_id, sdp}
+    MQ->>BE: deliver camera/answer
+    BE-->>Op: HTTP 200 {sdp}
+    Op->>Op: setRemoteDescription(answer)
+    Op--)TURN: ICE connectivity checks
+    VS--)TURN: ICE connectivity checks
+    VS->>Op: DTLS-SRTP media (H264 RTP), relayed via TURN
+```
+
+Note the last diagram's punchline: `BE` only ever sees SDP *text* (twice - the offer relay in, the answer relay back out), never a single video byte. Every arrow carrying actual media (`VS->>Op`) bypasses the backend entirely, exactly as the Path 2 diagram above promises. See [`docs/08-webrtc-signalling.md`](08-webrtc-signalling.md) for why signalling needed its own MQTT topics, and [`docs/09-frontend.md`](09-frontend.md) for why the TURN hop turned out to be load-bearing, not optional, against a real browser.
 
 ## Why it's needed
 
@@ -67,5 +148,7 @@ This doc itself doesn't ship code. What it establishes, that every later milesto
 1. **Two containers, one boundary.** `robot-container/` only ever speaks ROS2 internally and MQTT externally. `cloud-container/` only ever speaks MQTT to reach the robot — never ROS2.
 2. **Two data paths, two protocols.** Commands/telemetry ride MQTT. Video rides WebRTC, signalled (not carried) by the backend.
 3. **Config over hardcoding.** Every address that differs between "my laptop" and "AWS" is a config value, never a literal, from the very first working container.
+
+The three diagrams above were added in Milestone 11's final documentation pass, once every arrow in them had actually been built and verified (Milestones 1-10) - drawing the topology before any of it existed would have been a guess; drawing it now is a description of something real. See [`docs/api-reference.md`](api-reference.md) for the exact contract behind each arrow, and [`docs/11-aws-migration.md`](11-aws-migration.md) for how this same topology maps onto real AWS infrastructure.
 
 The next doc, [01 — Repository Structure](01-repository-structure.md), turns this into the actual folders and files created in Milestone 1.

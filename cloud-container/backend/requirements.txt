@@ -2,3 +2,9 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
 PyYAML==6.0.2
+# Milestone 7: fleet manager, robot registry, session manager, MQTT
+# service, auth - see cloud-container/backend/README.md.
+paho-mqtt==1.6.1
+asyncpg==0.29.0
+redis==5.0.8
+PyJWT==2.9.0

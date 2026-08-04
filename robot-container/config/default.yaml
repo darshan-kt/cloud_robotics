@@ -25,4 +25,20 @@ motion:
 health_server:
   port: 8080
 
+# GStreamer H264 encoding + WebRTC transport (Milestone 6). Bitrate is the
+# spec's explicit "video bitrate configurable" requirement; width/height
+# are NOT here - VideoStreamer reads those from the actual incoming camera
+# frames rather than assuming them. Signalling itself is MQTT-mediated
+# (Milestone 8, see robot_agent/agent.py's _on_camera_offer) - no
+# dev-signalling port to configure anymore.
+video:
+  bitrate_kbps: 1000
+  framerate: 15
+  keyframe_interval: 30
+  stun_server: "stun://stun.l.google.com:19302"
+  # Off by default - set via TURN_SERVER_URL env var (see
+  # docker-compose.yml's coturn service and docs/09-frontend.md for why
+  # this is needed, not just STUN).
+  turn_server: ""
+
 log_level: INFO

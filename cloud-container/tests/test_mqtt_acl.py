@@ -197,17 +197,113 @@ def test_robot_broad_subscription_is_still_filtered_at_delivery():
 
 def test_backend_cannot_publish_robot_telemetry():
     """Backend has `read` on telemetry, not `readwrite` - it must not be
-    able to impersonate a robot's own reported state."""
+    able to impersonate a robot's own reported state.
+
+    Asserts the SPOOFED PAYLOAD specifically never arrives, not "nothing
+    arrives at all" - as of Milestone 7, this topic legitimately carries
+    the real robot's own telemetry once every second whenever the full
+    stack is up (which it normally is, for the backend's own live
+    integration tests - see cloud-container/tests/test_registry_and_
+    sessions_live.py). An earlier version of this test asserted zero
+    messages received at all, which is correct in isolation but is a
+    false failure the moment a real robot is also running and publishing
+    its own legitimate telemetry during the test window - confirmed
+    directly by inspecting a "failure"'s received payloads, which turned
+    out to be genuine robot telemetry, not the spoofed one."""
     with mqtt_client(username=BACKEND_USERNAME, password=BACKEND_PASSWORD) as (observer, observer_rc):
         assert observer_rc == 0
         received = []
-        observer.on_message = lambda c, u, msg: received.append(msg)
+        observer.on_message = lambda c, u, msg: received.append(msg.payload.decode())
         observer.subscribe(f"robots/{ROBOT_ID}/telemetry", qos=1)
         time.sleep(0.3)
 
+        spoofed_payload = '{"spoofed": true}'
         with mqtt_client(username=BACKEND_USERNAME, password=BACKEND_PASSWORD) as (publisher, publisher_rc):
             assert publisher_rc == 0
-            publisher.publish(f"robots/{ROBOT_ID}/telemetry", '{"spoofed": true}', qos=1)
+            publisher.publish(f"robots/{ROBOT_ID}/telemetry", spoofed_payload, qos=1)
 
         time.sleep(MESSAGE_TIMEOUT)
-        assert not received, "backend must not be able to publish (impersonate) robot telemetry"
+        assert spoofed_payload not in received, (
+            "backend must not be able to publish (impersonate) robot telemetry"
+        )
+
+
+# --- WebRTC signalling (Milestone 8) - camera/offer (backend -> robot) and
+# camera/answer (robot -> backend), see docs/08-webrtc-signalling.md and
+# aclfile's comment on why backend originating an offer isn't the same
+# risk category as backend originating telemetry. ---
+def test_backend_can_publish_camera_offer_and_robot_receives_it():
+    with mqtt_client(username=ROBOT_ID, password=ROBOT_PASSWORD) as (robot, robot_rc):
+        assert robot_rc == 0
+        received = []
+        robot.on_message = lambda c, u, msg: received.append(msg.payload.decode())
+        robot.subscribe(f"robots/{ROBOT_ID}/camera/offer", qos=1)
+        time.sleep(0.3)
+
+        with mqtt_client(username=BACKEND_USERNAME, password=BACKEND_PASSWORD) as (backend, backend_rc):
+            assert backend_rc == 0
+            backend.publish(f"robots/{ROBOT_ID}/camera/offer", '{"request_id":"r1","sdp":"offer"}', qos=1)
+
+        assert _wait_until(lambda: len(received) > 0), (
+            "the robot should receive a WebRTC offer the backend addresses to its own topic"
+        )
+
+
+def test_robot_cannot_publish_camera_offer():
+    """The robot only has read on its own camera/offer - it must not be
+    able to publish there (only the backend originates offers)."""
+    with mqtt_client(username=BACKEND_USERNAME, password=BACKEND_PASSWORD) as (observer, observer_rc):
+        assert observer_rc == 0
+        received = []
+        observer.on_message = lambda c, u, msg: received.append(msg.payload.decode())
+        observer.subscribe(f"robots/{ROBOT_ID}/camera/offer", qos=1)
+        time.sleep(0.3)
+
+        spoofed_payload = '{"spoofed": true}'
+        with mqtt_client(username=ROBOT_ID, password=ROBOT_PASSWORD) as (robot, robot_rc):
+            assert robot_rc == 0
+            robot.publish(f"robots/{ROBOT_ID}/camera/offer", spoofed_payload, qos=1)
+
+        time.sleep(MESSAGE_TIMEOUT)
+        assert spoofed_payload not in received, "a robot must not be able to publish its own camera/offer"
+
+
+def test_robot_can_publish_camera_answer_and_backend_receives_it():
+    with mqtt_client(username=BACKEND_USERNAME, password=BACKEND_PASSWORD) as (backend, backend_rc):
+        assert backend_rc == 0
+        received = []
+        backend.on_message = lambda c, u, msg: received.append(msg.payload.decode())
+        backend.subscribe(f"robots/{ROBOT_ID}/camera/answer", qos=1)
+        time.sleep(0.3)
+
+        with mqtt_client(username=ROBOT_ID, password=ROBOT_PASSWORD) as (robot, robot_rc):
+            assert robot_rc == 0
+            robot.publish(f"robots/{ROBOT_ID}/camera/answer", '{"request_id":"r1","sdp":"answer"}', qos=1)
+
+        assert _wait_until(lambda: len(received) > 0), (
+            "the backend should receive the robot's WebRTC answer"
+        )
+
+
+def test_backend_cannot_publish_camera_answer():
+    """Backend has `read` on camera/answer, not `readwrite` - same
+    "can't impersonate what only the robot should originate" principle as
+    telemetry/health/status, see test_backend_cannot_publish_robot_telemetry
+    above for why this asserts the specific spoofed payload never arrives
+    rather than "nothing arrives at all"."""
+    with mqtt_client(username=BACKEND_USERNAME, password=BACKEND_PASSWORD) as (observer, observer_rc):
+        assert observer_rc == 0
+        received = []
+        observer.on_message = lambda c, u, msg: received.append(msg.payload.decode())
+        observer.subscribe(f"robots/{ROBOT_ID}/camera/answer", qos=1)
+        time.sleep(0.3)
+
+        spoofed_payload = '{"spoofed": true}'
+        with mqtt_client(username=BACKEND_USERNAME, password=BACKEND_PASSWORD) as (publisher, publisher_rc):
+            assert publisher_rc == 0
+            publisher.publish(f"robots/{ROBOT_ID}/camera/answer", spoofed_payload, qos=1)
+
+        time.sleep(MESSAGE_TIMEOUT)
+        assert spoofed_payload not in received, (
+            "backend must not be able to publish (impersonate) a robot's WebRTC answer"
+        )
