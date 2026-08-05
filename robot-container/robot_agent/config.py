@@ -30,6 +30,11 @@ class IntervalsConfig:
     heartbeat_seconds: float = 1.0
     telemetry_seconds: float = 1.0
     health_seconds: float = 2.0
+    # Independent of /scan's own ROS2 publish rate (~5Hz on the real
+    # simulated LDS-01) - same "cache the latest, republish on our own
+    # schedule" pattern as telemetry/health. 0.5s (2Hz) is plenty for a
+    # small on-screen panel; nothing downstream needs sensor-native rate.
+    lidar_seconds: float = 0.5
     watchdog_check_seconds: float = 5.0
     watchdog_unhealthy_after_seconds: float = 15.0
 
@@ -111,6 +116,7 @@ def load_config() -> AgentConfig:
             heartbeat_seconds=float(intervals_yaml.get("heartbeat_seconds", 1.0)),
             telemetry_seconds=float(intervals_yaml.get("telemetry_seconds", 1.0)),
             health_seconds=float(intervals_yaml.get("health_seconds", 2.0)),
+            lidar_seconds=float(intervals_yaml.get("lidar_seconds", 0.5)),
             watchdog_check_seconds=float(intervals_yaml.get("watchdog_check_seconds", 5.0)),
             watchdog_unhealthy_after_seconds=float(
                 intervals_yaml.get("watchdog_unhealthy_after_seconds", 15.0)

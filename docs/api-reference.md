@@ -1,6 +1,6 @@
 # API & MQTT Reference
 
-> **Reference material, not a numbered milestone doc.** The docs in [`docs/README.md`](README.md)'s reading order teach *why* each piece exists, in the order it was built; this page is the opposite kind of document — everything in one place, for looking something up while you're working, not for reading start to finish. Every shape here is pulled directly from the current code (`cloud-container/backend/app/`, `robot-container/robot_agent/topics.py`, `cloud-container/mosquitto/aclfile`) as of Milestone 10 — if it drifts from the code, the code wins; open an issue against this file, not the other way around.
+> **Reference material, not a numbered milestone doc.** The docs in [`docs/README.md`](README.md)'s reading order teach *why* each piece exists, in the order it was built; this page is the opposite kind of document — everything in one place, for looking something up while you're working, not for reading start to finish. Every shape here is pulled directly from the current code (`cloud-container/backend/app/`, `robot-container/robot_agent/topics.py`, `cloud-container/mosquitto/aclfile`) — kept current through the LiDAR panel added post-Milestone-11 — if it drifts from the code, the code wins; open an issue against this file, not the other way around.
 
 ## REST API
 
@@ -12,7 +12,7 @@ Base URL: `http://localhost:8000` locally (`API_BASE_URL` — see [`docs/02-dock
 | `GET /metrics` | none | — | `{robots_known, robots_online, robots_in_use, mqtt_connected}` | Real fleet counts, not static placeholders. |
 | `POST /auth/login` | none | `{username, password}` | `{access_token, token_type: "bearer", expires_in}` (`200`) or `401` | One shared operator credential (`OPERATOR_USERNAME`/`OPERATOR_PASSWORD`), constant-time compared. `expires_in` defaults to `JWT_EXPIRY_SECONDS` = 3600s. |
 | `GET /robots` | bearer | — | `RobotSummary[]` | `RobotSummary = {robot_id, display_name, status: "online"\|"offline"\|"unknown", last_seen, battery_percentage, in_use_by}`. |
-| `GET /robots/{id}` | bearer | — | `RobotDetail` (`200`) or `404` | `RobotDetail` = `RobotSummary` + `{telemetry, health}` (raw dicts, shapes below under MQTT `telemetry`/`health`). |
+| `GET /robots/{id}` | bearer | — | `RobotDetail` (`200`) or `404` | `RobotDetail` = `RobotSummary` + `{telemetry, health, lidar}` (raw dicts, shapes below under MQTT `telemetry`/`health`/`lidar`). `lidar` is `null` until the robot's first scan arrives - see that topic's row for why (no meaningful "empty" scan shape exists). |
 | `POST /robots/{id}/session` | bearer | — | `SessionInfo` (`200`), `404`, or `409` | Acquires the exclusive control session. `SessionInfo = {session_id, robot_id, operator, acquired_at, expires_at}`. `409` if another operator already holds it. |
 | `DELETE /robots/{id}/session` | bearer | — | `204`, `404`, or `409` | Releases the session. `409` if the caller isn't the current holder. |
 | `POST /robots/{id}/control` | bearer + **session** | `{command}` | `202 {"status": "sent"}`, `404`, or `403` | `command ∈ {forward, backward, left, right, stop}`. `403` if the caller doesn't hold the session. Renews the session on success. |
@@ -55,10 +55,11 @@ Broker: Eclipse Mosquitto, `mosquitto:1883` internally / `localhost:1883` publis
 | `robots/{id}/heartbeat` | robot → backend | 0 | no | `{"robot_id", "timestamp": <epoch float>, "status": "alive"}` |
 | `robots/{id}/camera/offer` | backend → robot | 1 | no | `{"request_id": <uuid>, "sdp": <string>}` — SDP **signalling only**, never video bytes (those go over the separate WebRTC/DTLS-SRTP media path). |
 | `robots/{id}/camera/answer` | robot → backend | 1 | no | `{"request_id": <uuid>, "sdp": <string>}` — `request_id` echoes the offer's; MQTT has no native request/response correlation, so this is hand-rolled (`webrtc/relay.py`). |
+| `robots/{id}/lidar` | robot → backend | 0 | no | `{"robot_id", "timestamp": <epoch float>, "angle_min", "angle_max", "angle_increment", "range_min", "range_max", "ranges": [number\|null, ...]}` — 2D LIDAR scan, republished by the robot's own periodic loop (`intervals.lidar_seconds`, default 0.5s/2Hz) independent of `/scan`'s native ROS2 rate. `ranges[i]` is the reading at angle `angle_min + i * angle_increment`; `null` (not ROS2's `inf` — invalid JSON) means nothing detected within range. Never published at all until the robot has a real scan cached — no meaningful "empty" shape exists, unlike telemetry/health's always-valid nulls. Added post-Milestone-11 — see `docs/09-frontend.md`'s `LidarView` component. |
 
 **ACL boundary, by role** (see `aclfile`):
 
-| Role | `cmd` | `telemetry`/`health`/`status`/`heartbeat` | `camera/offer` | `camera/answer` |
+| Role | `cmd` | `telemetry`/`health`/`status`/`heartbeat`/`lidar` | `camera/offer` | `camera/answer` |
 |---|---|---|---|---|
 | `backend` | write | **read-only** | write | **read-only** |
 | robot (`%u` = its own `robot_id`) | **read-only** (own topic) | write (own topic) | **read-only** (own topic) | write (own topic) |

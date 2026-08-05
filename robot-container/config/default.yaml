@@ -15,6 +15,9 @@ intervals:
   heartbeat_seconds: 1
   telemetry_seconds: 1
   health_seconds: 2
+  # Independent of /scan's own ~5Hz ROS2 rate - see robot_agent/agent.py's
+  # publish_lidar_scan(). 2Hz is plenty for a small on-screen panel.
+  lidar_seconds: 0.5
   watchdog_check_seconds: 5
   watchdog_unhealthy_after_seconds: 15
 

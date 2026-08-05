@@ -5,7 +5,7 @@
 **Contains**, each as its own module (single responsibility, dependency-injected — see [`docs/07-cloud-backend.md`](../../docs/07-cloud-backend.md) for the full reasoning):
 - `auth/` — JWT-based operator sessions (`tokens.py` encode/decode, `service.py` credential check, `dependencies.py` FastAPI/WebSocket extraction)
 - `fleet/` — fleet manager: the one place REST and WebSocket both route through, so a command sent either way is governed by identical rules
-- `registry/` — robot registry: Postgres for durable identity (which robots exist), Redis for live state (status/telemetry/health)
+- `registry/` — robot registry: Postgres for durable identity (which robots exist), Redis for live state (status/telemetry/health/lidar)
 - `sessions/` — exclusive per-robot control sessions: a Redis TTL lock plus a Postgres audit log, mirroring the robot's own MQTT Last-Will-and-Testament pattern
 - `api/` — REST endpoints (`POST /auth/login`, `GET /robots`, `GET /robots/{id}`, `POST`/`DELETE /robots/{id}/session`, `POST /robots/{id}/control`, `POST /robots/{id}/stop`, `POST /robots/{id}/webrtc/offer`, `GET /health`, `GET /metrics`)
 - `ws/` — WebSocket endpoints (`/ws/teleop/{robot_id}`, `/ws/status`)

@@ -43,6 +43,29 @@ async def test_get_robot_raises_for_unknown_robot(wired):
         await fleet.get_robot("no-such-robot")
 
 
+async def test_get_robot_composes_telemetry_health_and_lidar(wired):
+    fleet, registry, _sessions, _mqtt = wired
+    registry.telemetry[ROBOT_ID] = {"battery_percentage": 87.0}
+    registry.health[ROBOT_ID] = {"cpu_percent": 12.0}
+    registry.lidar[ROBOT_ID] = {"ranges": [1.0, 2.0]}
+
+    detail = await fleet.get_robot(ROBOT_ID)
+
+    assert detail.telemetry == {"battery_percentage": 87.0}
+    assert detail.health == {"cpu_percent": 12.0}
+    assert detail.lidar == {"ranges": [1.0, 2.0]}
+
+
+async def test_get_robot_reports_no_lidar_scan_yet_as_none(wired):
+    """Mirrors telemetry/health's own "nothing reported yet" behavior -
+    see registry/store.py's get_lidar_scan()."""
+    fleet, _registry, _sessions, _mqtt = wired
+
+    detail = await fleet.get_robot(ROBOT_ID)
+
+    assert detail.lidar is None
+
+
 async def test_acquire_session_raises_for_unknown_robot(wired):
     fleet, _registry, _sessions, _mqtt = wired
 

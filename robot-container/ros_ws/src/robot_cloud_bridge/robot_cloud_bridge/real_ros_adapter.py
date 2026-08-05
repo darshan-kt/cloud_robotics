@@ -16,6 +16,12 @@ same as it's always been agnostic about what feeds /odom. See
 docs/06-video-streaming.md. subscribe_battery/subscribe_diagnostics remain
 honest logged stubs - Turtlebot3's Gazebo stack has no real topics to
 bridge for either, see docs/05-ros2-integration.md.
+
+subscribe_lidar() is also real (added post-Milestone-11, alongside the
+frontend's LiDAR panel): /scan is Gazebo's simulated Turtlebot3 LDS-01
+LIDAR sensor, published natively by the turtlebot3_waffle_pi model itself -
+nothing extra to launch, unlike the camera's webcam_driver.py. See
+docs/api-reference.md's `lidar` MQTT topic entry.
 """
 import logging
 import math
@@ -27,10 +33,10 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, LaserScan
 
 from robot_agent.interfaces import ROSAdapter
-from robot_agent.models import BatteryState, CameraFrame, DiagnosticsData, OdometryData
+from robot_agent.models import BatteryState, CameraFrame, DiagnosticsData, LaserScanData, OdometryData
 
 
 def _yaw_from_quaternion(x: float, y: float, z: float, w: float) -> float:
@@ -50,6 +56,7 @@ class RealROSAdapter(ROSAdapter):
         self._diagnostics_callback: Optional[Callable[[DiagnosticsData], None]] = None
         self._battery_callback: Optional[Callable[[BatteryState], None]] = None
         self._camera_callback: Optional[Callable[[CameraFrame], None]] = None
+        self._lidar_callback: Optional[Callable[[LaserScanData], None]] = None
 
         self._node: Optional[Node] = None
         self._executor: Optional[SingleThreadedExecutor] = None
@@ -65,6 +72,10 @@ class RealROSAdapter(ROSAdapter):
         # depth=1: always process the latest camera frame, never build up a
         # backlog of stale ones if VideoStreamer falls behind for a moment.
         self._node.create_subscription(Image, "/camera/image_raw", self._handle_camera_image, 1)
+        # depth=1, same reasoning as camera above - agent.py's own periodic
+        # publish loop (not this subscription's rate) decides how often a
+        # scan actually goes out over MQTT, so only the latest one matters.
+        self._node.create_subscription(LaserScan, "/scan", self._handle_laser_scan, 1)
 
         self._executor = SingleThreadedExecutor()
         self._executor.add_node(self._node)
@@ -72,7 +83,8 @@ class RealROSAdapter(ROSAdapter):
         self._spin_thread.start()
 
         self._logger.info(
-            "RealROSAdapter started - publishing /cmd_vel, subscribed to /odom and /camera/image_raw"
+            "RealROSAdapter started - publishing /cmd_vel, subscribed to /odom, "
+            "/camera/image_raw, and /scan"
         )
 
     def stop(self) -> None:
@@ -109,6 +121,9 @@ class RealROSAdapter(ROSAdapter):
             "stack doesn't model battery state - battery_percentage will report null"
         )
 
+    def subscribe_lidar(self, callback: Callable[[LaserScanData], None]) -> None:
+        self._lidar_callback = callback
+
     # --- rclpy callbacks (run on the executor's spin thread) ---
     def _handle_camera_image(self, msg: Image) -> None:
         if not self._camera_callback:
@@ -119,6 +134,31 @@ class RealROSAdapter(ROSAdapter):
                 width=msg.width,
                 height=msg.height,
                 encoding=msg.encoding,
+            )
+        )
+
+    def _handle_laser_scan(self, msg: LaserScan) -> None:
+        if not self._lidar_callback:
+            return
+        # ROS2 represents "nothing detected within range" as `inf` (and,
+        # rarely, an invalid reading as `nan`) - neither is valid JSON, and
+        # `json.dumps` would happily emit the literal tokens `Infinity`/
+        # `NaN` anyway (a Python-specific extension), which crashes
+        # `JSON.parse()` in every browser the moment such a scan reaches
+        # the frontend. math.isfinite() catches both; None/JSON null is
+        # also the semantically correct "no detection here", not just a
+        # workaround. round(): a real LDS-01 has nowhere near float64's
+        # precision to begin with, and 360 unrounded floats is a
+        # meaningfully bigger MQTT payload for zero real gain - see
+        # docs/api-reference.md.
+        self._lidar_callback(
+            LaserScanData(
+                angle_min=msg.angle_min,
+                angle_max=msg.angle_max,
+                angle_increment=msg.angle_increment,
+                range_min=msg.range_min,
+                range_max=msg.range_max,
+                ranges=[round(r, 3) if math.isfinite(r) else None for r in msg.ranges],
             )
         )
 

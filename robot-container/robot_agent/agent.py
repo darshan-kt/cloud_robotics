@@ -17,13 +17,14 @@ from typing import Optional
 from robot_agent.config import AgentConfig
 from robot_agent.dispatcher import CommandDispatcher
 from robot_agent.interfaces import MQTTClientInterface, ROSAdapter
-from robot_agent.models import BatteryState, CameraFrame, DiagnosticsData, OdometryData
+from robot_agent.models import BatteryState, CameraFrame, DiagnosticsData, LaserScanData, OdometryData
 from robot_agent.topics import (
     camera_answer_topic,
     camera_offer_topic,
     cmd_topic,
     health_topic,
     heartbeat_topic,
+    lidar_topic,
     status_topic,
     telemetry_topic,
 )
@@ -64,11 +65,13 @@ class RobotCloudAgent:
         self._latest_odometry: Optional[OdometryData] = None
         self._latest_battery: Optional[BatteryState] = None
         self._latest_diagnostics: Optional[DiagnosticsData] = None
+        self._latest_lidar_scan: Optional[LaserScanData] = None
 
         self._metrics = {
             "heartbeats_sent": 0,
             "telemetry_published": 0,
             "health_published": 0,
+            "lidar_scans_published": 0,
             "commands_received": 0,
             "commands_rejected": 0,
             "camera_frames_received": 0,
@@ -81,6 +84,7 @@ class RobotCloudAgent:
         self._ros.subscribe_battery(self._on_battery)
         self._ros.subscribe_diagnostics(self._on_diagnostics)
         self._ros.subscribe_camera(self._on_camera_frame)
+        self._ros.subscribe_lidar(self._on_lidar_scan)
 
     # --- ROSAdapter callbacks: cache the latest sample for the periodic publishers ---
     def _on_odometry(self, data: OdometryData) -> None:
@@ -91,6 +95,9 @@ class RobotCloudAgent:
 
     def _on_diagnostics(self, data: DiagnosticsData) -> None:
         self._latest_diagnostics = data
+
+    def _on_lidar_scan(self, data: LaserScanData) -> None:
+        self._latest_lidar_scan = data
 
     def _on_camera_frame(self, frame: CameraFrame) -> None:
         # Runs on the ROS2 callback thread (see real_ros_adapter.py) - one
@@ -168,6 +175,34 @@ class RobotCloudAgent:
         self._mqtt.publish(health_topic(self._robot_id), payload, qos=1)
         self._metrics["health_published"] += 1
 
+    def publish_lidar_scan(self) -> None:
+        scan = self._latest_lidar_scan
+        if scan is None:
+            # Unlike telemetry/health (which always publish - "no odometry
+            # yet" just means every field reads as 0/null, a valid state),
+            # a LaserScan has no meaningful "empty" representation - an
+            # all-zero ranges array would render as an obstacle pressed
+            # against the robot on every side, which is actively
+            # misleading, not just uninformative. Skip the publish
+            # entirely until a real scan exists.
+            return
+        payload = json.dumps(
+            {
+                "robot_id": self._robot_id,
+                "timestamp": time.time(),
+                "angle_min": scan.angle_min,
+                "angle_max": scan.angle_max,
+                "angle_increment": scan.angle_increment,
+                "range_min": scan.range_min,
+                "range_max": scan.range_max,
+                "ranges": scan.ranges,
+            }
+        )
+        # QoS 0, not retained - same reasoning as telemetry: frequent,
+        # ephemeral, latest-value-only. See docs/api-reference.md.
+        self._mqtt.publish(lidar_topic(self._robot_id), payload, qos=0)
+        self._metrics["lidar_scans_published"] += 1
+
     def receive_command(self, payload: dict) -> None:
         command = payload.get("command") if isinstance(payload, dict) else None
         if not command:
@@ -238,6 +273,7 @@ class RobotCloudAgent:
             self._loop(self.heartbeat, self._config.intervals.heartbeat_seconds, stop_event),
             self._loop(self.publish_telemetry, self._config.intervals.telemetry_seconds, stop_event),
             self._loop(self.publish_health, self._config.intervals.health_seconds, stop_event),
+            self._loop(self.publish_lidar_scan, self._config.intervals.lidar_seconds, stop_event),
             self._watchdog.run(stop_event),
         )
 

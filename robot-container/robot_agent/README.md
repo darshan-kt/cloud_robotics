@@ -12,7 +12,7 @@
 - `health_server.py` — local `GET /health` / `GET /metrics` for the container orchestrator
 - `watchdog.py` — notices prolonged MQTT disconnection, triggers a restart
 - `config.py`, `logging_config.py` — YAML+env configuration, structured JSON logging
-- `agent.py` — `RobotCloudAgent`, exposing `connect()`, `disconnect()`, `publish_telemetry()`, `receive_command()`, `publish_health()`, `stream_video()`, `shutdown()`, `restart()`, `heartbeat()`
+- `agent.py` — `RobotCloudAgent`, exposing `connect()`, `disconnect()`, `publish_telemetry()`, `receive_command()`, `publish_health()`, `publish_lidar_scan()` (post-Milestone-11), `stream_video()`, `shutdown()`, `restart()`, `heartbeat()`
 - `main.py` — composition root; the one place concrete implementations are chosen
 
 WebRTC video streaming (`stream_video()`) is present on the interface but not implemented yet — it arrives with the GStreamer/WebRTC pipeline in Milestone 6.

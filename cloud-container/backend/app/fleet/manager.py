@@ -44,7 +44,8 @@ class FleetManager:
         summary.in_use_by = await self._sessions.get_holder(robot_id)
         telemetry = await self._registry.get_telemetry(robot_id)
         health = await self._registry.get_health(robot_id)
-        return RobotDetail(**summary.model_dump(), telemetry=telemetry, health=health)
+        lidar = await self._registry.get_lidar_scan(robot_id)
+        return RobotDetail(**summary.model_dump(), telemetry=telemetry, health=health, lidar=lidar)
 
     async def acquire_session(self, robot_id: str, operator: str) -> SessionInfo:
         await self._require_known(robot_id)

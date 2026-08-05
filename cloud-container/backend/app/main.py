@@ -68,6 +68,7 @@ async def lifespan(app: FastAPI):
     mqtt_service.on_message("telemetry", registry.record_telemetry)
     mqtt_service.on_message("health", registry.record_health)
     mqtt_service.on_message("heartbeat", registry.record_heartbeat)
+    mqtt_service.on_message("lidar", registry.record_lidar_scan)
     mqtt_service.on_message("camera/answer", webrtc_relay.handle_answer)
 
     fleet_manager = FleetManager(registry, sessions, mqtt_service)

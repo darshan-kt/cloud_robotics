@@ -11,6 +11,7 @@ class FakeRobotRegistry:
         self.robots: dict[str, RobotSummary] = {}
         self.telemetry: dict[str, dict] = {}
         self.health: dict[str, dict] = {}
+        self.lidar: dict[str, dict] = {}
 
     def add_robot(self, robot_id: str, **overrides) -> None:
         defaults = {"robot_id": robot_id, "display_name": robot_id, "status": "online"}
@@ -28,3 +29,6 @@ class FakeRobotRegistry:
 
     async def get_health(self, robot_id: str) -> Optional[dict]:
         return self.health.get(robot_id)
+
+    async def get_lidar_scan(self, robot_id: str) -> Optional[dict]:
+        return self.lidar.get(robot_id)

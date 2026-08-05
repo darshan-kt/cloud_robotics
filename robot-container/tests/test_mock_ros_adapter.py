@@ -24,6 +24,28 @@ def test_odometry_and_battery_callbacks_fire_with_plausible_values():
     assert all(0.0 <= b.percentage <= 100.0 for b in battery_events)
 
 
+def test_lidar_callback_fires_with_a_plausible_scan():
+    adapter = MockROSAdapter(robot_id="test-robot", update_interval_seconds=0.05)
+    scan_events = []
+    adapter.subscribe_lidar(scan_events.append)
+
+    adapter.start()
+    try:
+        time.sleep(0.3)
+    finally:
+        adapter.stop()
+
+    assert len(scan_events) >= 2
+    scan = scan_events[-1]
+    # Matches the real simulated LDS-01 exactly (see mock_ros_adapter.py's
+    # module-level constants) - same shape a UI built against real hardware
+    # can rely on in tests.
+    assert len(scan.ranges) == 360
+    assert scan.range_min == 0.12
+    assert scan.range_max == 3.5
+    assert all(scan.range_min <= r <= scan.range_max for r in scan.ranges)
+
+
 def test_battery_does_not_drain_while_idle():
     adapter = MockROSAdapter(robot_id="test-robot", update_interval_seconds=0.05)
     battery_events = []

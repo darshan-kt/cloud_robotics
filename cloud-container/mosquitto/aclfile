@@ -25,6 +25,7 @@ topic read robots/+/status
 topic write robots/+/camera/offer
 topic read robots/+/camera/answer
 topic read robots/+/heartbeat
+topic read robots/+/lidar
 
 # --- robots: one rule set for every robot, no per-robot editing ---
 # Each robot's MQTT username IS its robot_id (see
@@ -40,3 +41,4 @@ pattern write robots/%u/status
 pattern read robots/%u/camera/offer
 pattern write robots/%u/camera/answer
 pattern write robots/%u/heartbeat
+pattern write robots/%u/lidar

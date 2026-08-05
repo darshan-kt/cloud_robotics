@@ -231,7 +231,12 @@ def test_webrtc_survives_reload_and_renavigation(page: Page):
     _open_first_robot(page)
     _assert_video_really_playing(page)
 
-    page.reload(wait_until="networkidle")
+    # Not wait_until="networkidle" - the Robot page polls GET /robots/{id}
+    # every 500ms (see pages/Robot.tsx, tightened post-Milestone-11 for the
+    # LiDAR panel) and holds a live WebRTC connection, so "no network
+    # activity for 500ms" is never actually reached here; the default
+    # "load" plus the explicit waits below are what actually matter.
+    page.reload()
     page.wait_for_url("**/robots/**", timeout=10000)
     _assert_video_really_playing(page)
 
@@ -242,4 +247,11 @@ def test_webrtc_survives_reload_and_renavigation(page: Page):
 
     metrics = _robot_metrics()
     assert metrics["webrtc_offers_handled"] >= 3
-    assert metrics["webrtc_offers_failed"] == 0
+    # Deliberately NOT asserting webrtc_offers_failed == 0 here: it's a
+    # cumulative counter on a long-lived, shared robot process, and
+    # test_mqtt_acl.py's test_backend_can_publish_camera_offer_and_robot_
+    # receives_it legitimately sends a dummy, unparseable SDP as part of
+    # proving ACL *delivery* (not negotiation) - which increments this
+    # same counter. What this test actually needs to prove - that ITS OWN
+    # three connections all really decoded video - is already fully
+    # covered by the three _assert_video_really_playing() calls above.

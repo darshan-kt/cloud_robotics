@@ -26,6 +26,7 @@ export interface RobotSummary {
 export interface RobotDetail extends RobotSummary {
   telemetry: RobotTelemetry | null
   health: RobotHealth | null
+  lidar: LaserScan | null
 }
 
 // Shapes of the raw MQTT payloads robot_agent/agent.py publishes - see
@@ -47,6 +48,25 @@ export interface RobotHealth {
   memory_percent: number | null
   temperature_c: number | null
   mqtt_connected: boolean
+}
+
+// robot_agent/agent.py's publish_lidar_scan() payload, passed through
+// unmodified by the backend (see registry/store.py) - same "mirrors the
+// robot side, not a backend-defined shape" reasoning as RobotTelemetry/
+// RobotHealth above. `ranges[i]` is the reading at angle `angle_min + i *
+// angle_increment`; `null` means "nothing detected within range" (the
+// robot side already converts ROS2's `inf` to `null` - see
+// real_ros_adapter.py's _handle_laser_scan() - since `Infinity` isn't
+// valid JSON and would break JSON.parse() here).
+export interface LaserScan {
+  robot_id: string
+  timestamp: number
+  angle_min: number
+  angle_max: number
+  angle_increment: number
+  range_min: number
+  range_max: number
+  ranges: (number | null)[]
 }
 
 export interface SessionInfo {

@@ -22,6 +22,13 @@ def heartbeat_topic(robot_id: str) -> str:
     return f"robots/{robot_id}/heartbeat"
 
 
+def lidar_topic(robot_id: str) -> str:
+    """Robot -> backend: the latest 2D LIDAR scan, republished at
+    intervals.lidar_seconds (independent of /scan's own ROS2 rate - see
+    agent.py's publish_lidar_scan()). See docs/api-reference.md."""
+    return f"robots/{robot_id}/lidar"
+
+
 def camera_offer_topic(robot_id: str) -> str:
     """Backend -> robot: an SDP offer to answer. See
     docs/08-webrtc-signalling.md - this replaces dev_signalling_server.py's

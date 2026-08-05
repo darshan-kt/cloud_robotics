@@ -1,0 +1,139 @@
+# Cloud Robotics Platform - developer entry points.
+#
+# This is a thin, documented wrapper around `docker compose` and the
+# scripts/test suites already in this repo (see README.md and
+# docs/10-testing-strategy.md) - it doesn't do anything you couldn't do by
+# hand, it just gives every one of those commands a short, memorable name.
+#
+# Run `make` (or `make help`) with no target to see this list.
+
+# -include, not include: don't fail if .env doesn't exist yet (that's
+# exactly what `make setup` is for). Deliberately NOT `export`-ed: `docker
+# compose` already reads .env on its own for every value it needs, so
+# re-exporting Make's own copy of it would just add a second, competing
+# source - and a real one at that: Make variables shadow same-named
+# environment variables in recipes once exported, which would silently
+# defeat something like `CAMERA_TEST_PATTERN_FALLBACK=true make
+# restart-robot` (a real thing `make restart-robot`'s own help text
+# recommends - see README.md). Pulling `.env` in here unexported is only
+# for THIS Makefile's own $(VAR) text substitution below (health/token/
+# open messages) - it never touches what a recipe's child process actually
+# sees in its environment.
+-include .env
+
+BACKEND_PORT ?= 8000
+FRONTEND_PORT ?= 3000
+ROBOT_HEALTH_PORT ?= 8080
+OPERATOR_USERNAME ?= operator
+OPERATOR_PASSWORD ?= operator_dev_password
+
+.DEFAULT_GOAL := help
+.PHONY: help setup build up up-test-pattern up-camera up-gui gzclient down restart restart-robot \
+        ps status logs health token open test test-robot test-cloud clean prune
+
+help: ## Show this help
+	@echo "Cloud Robotics Platform - available targets:"
+	@echo
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' Makefile | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+
+## --- Setup & build ---
+
+setup: ## Create .env from .env.example if it doesn't exist yet
+	@test -f .env || cp .env.example .env
+	@echo ".env ready - edit it if you need non-default credentials/ports (see .env.example's own comments)."
+
+build: setup ## Build all Docker images (backend, frontend, robot)
+	docker compose build
+
+## --- Running the stack ---
+
+up: setup ## Start the full stack (7 services), waiting for health checks. No real webcam feed unless you also use `make up-camera` or `make up-test-pattern`.
+	docker compose up -d --build
+	@$(MAKE) --no-print-directory _wait-healthy
+	@echo
+	@echo "Stack is up:"
+	@echo "  Console:  http://localhost:$(FRONTEND_PORT)  (login: $(OPERATOR_USERNAME) / $(OPERATOR_PASSWORD))"
+	@echo "  Backend:  http://localhost:$(BACKEND_PORT)/health"
+	@echo "  Robot:    http://localhost:$(ROBOT_HEALTH_PORT)/health"
+
+up-test-pattern: setup ## Start the stack with a SYNTHETIC camera pattern (no physical webcam needed) - see docs/06-video-streaming.md
+	CAMERA_TEST_PATTERN_FALLBACK=true docker compose up -d --build
+	@$(MAKE) --no-print-directory _wait-healthy
+	@echo "Stack is up with a synthetic test-pattern camera feed. Console: http://localhost:$(FRONTEND_PORT)"
+
+up-camera: setup ## Start the stack with your REAL webcam passed through (requires CAMERA_DEVICE in .env, default /dev/video0) - see docker-compose.camera.yml
+	docker compose -f docker-compose.yml -f docker-compose.camera.yml up -d --build
+	@$(MAKE) --no-print-directory _wait-healthy
+	@echo "Stack is up with a real webcam feed. Console: http://localhost:$(FRONTEND_PORT)"
+
+up-gui: setup ## Start the stack with the host's X11 display passed through to the robot container, for `make gzclient` (visual Gazebo debugging) - see docker-compose.gui.yml
+	@command -v xhost >/dev/null 2>&1 && xhost +local:docker >/dev/null 2>&1 || true
+	docker compose -f docker-compose.yml -f docker-compose.gui.yml up -d --build
+	@$(MAKE) --no-print-directory _wait-healthy
+	@echo "Stack is up with X11 passthrough. Run 'make gzclient' to open the Gazebo GUI."
+	@echo "Tip: combine with a camera source too, e.g. 'CAMERA_TEST_PATTERN_FALLBACK=true make up-gui'."
+
+gzclient: ## Open Gazebo's GUI window, attached to the already-running simulation (run `make up-gui` first)
+	docker exec -it cloud-robotics-robot gzclient
+
+_wait-healthy:
+	@echo "Waiting for backend + robot health checks..."
+	@until curl -sf http://localhost:$(BACKEND_PORT)/health >/dev/null 2>&1; do sleep 1; done
+	@until curl -sf http://localhost:$(ROBOT_HEALTH_PORT)/health >/dev/null 2>&1; do sleep 1; done
+
+down: ## Stop the stack (keeps volumes - Postgres/Redis/Mosquitto data survives)
+	docker compose down
+
+restart: down up ## Stop and start the full stack
+
+restart-robot: ## Recreate just the robot container (e.g. after editing .env) without restarting everything else
+	docker compose up -d --no-deps robot
+
+## --- Inspecting the running stack ---
+
+ps: ## Show container status
+	docker compose ps
+
+status: ps ## Alias for `ps`
+
+logs: ## Tail logs - all services, or one: `make logs SERVICE=robot`
+	docker compose logs -f $(SERVICE)
+
+health: ## Curl the backend, robot, and frontend health endpoints
+	@printf "Backend:  " && curl -sf http://localhost:$(BACKEND_PORT)/health && echo
+	@printf "Robot:    " && curl -sf http://localhost:$(ROBOT_HEALTH_PORT)/health && echo
+	@printf "Frontend: " && curl -sf -o /dev/null -w "HTTP %{http_code}\n" http://localhost:$(FRONTEND_PORT)/
+
+token: ## Fetch a fresh operator JWT and print it (handy for `curl -H "Authorization: Bearer $$(make -s token)"`)
+	@curl -s -X POST http://localhost:$(BACKEND_PORT)/auth/login \
+		-H 'Content-Type: application/json' \
+		-d '{"username":"$(OPERATOR_USERNAME)","password":"$(OPERATOR_PASSWORD)"}' \
+		| python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])"
+
+open: ## Open the operator console in your default browser
+	@xdg-open http://localhost:$(FRONTEND_PORT) 2>/dev/null \
+		|| open http://localhost:$(FRONTEND_PORT) 2>/dev/null \
+		|| echo "Open http://localhost:$(FRONTEND_PORT) manually"
+
+## --- Testing (see docs/10-testing-strategy.md) ---
+
+test: ## Run the FULL three-container integration suite (robot + backend + real-browser frontend E2E) - 80 tests, one command
+	./scripts/run-integration-tests.sh
+
+test-robot: ## Run only the robot_agent unit tests, inside the live robot container
+	docker cp robot-container/tests cloud-robotics-robot:/robot/tests
+	docker cp robot-container/pytest.ini cloud-robotics-robot:/robot/pytest.ini
+	docker compose exec robot bash -c "pip install -q -r /robot/tests/requirements.txt && cd /robot && python3 -m pytest tests/ -v"
+
+test-cloud: ## Run only the backend + real-browser frontend E2E tests, on the host, against the live stack
+	pip install -q -r cloud-container/tests/requirements.txt
+	pytest cloud-container/tests/ -v
+
+## --- Cleanup ---
+
+clean: ## Stop the stack AND remove volumes (deletes all Postgres/Redis/Mosquitto data)
+	docker compose down -v
+
+prune: ## Reclaim disk space (dangling images, unused build cache) - safe, doesn't touch running containers
+	docker image prune -f
+	docker builder prune -f

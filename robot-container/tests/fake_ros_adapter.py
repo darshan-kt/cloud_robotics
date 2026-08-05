@@ -22,3 +22,6 @@ class RecordingROSAdapter(ROSAdapter):
 
     def subscribe_battery(self, callback):
         pass
+
+    def subscribe_lidar(self, callback):
+        pass

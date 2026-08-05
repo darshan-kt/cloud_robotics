@@ -285,6 +285,51 @@ def test_robot_can_publish_camera_answer_and_backend_receives_it():
         )
 
 
+# --- LIDAR (post-Milestone-11) - robot -> backend, same read-only-for-
+# backend shape as telemetry/health/status, see aclfile's comment on why
+# self-reported robot state is never something the backend may originate. ---
+def test_robot_can_publish_lidar_and_backend_receives_it():
+    with mqtt_client(username=BACKEND_USERNAME, password=BACKEND_PASSWORD) as (backend, backend_rc):
+        assert backend_rc == 0
+        received = []
+        backend.on_message = lambda c, u, msg: received.append(msg.payload.decode())
+        backend.subscribe(f"robots/{ROBOT_ID}/lidar", qos=1)
+        time.sleep(0.3)
+
+        with mqtt_client(username=ROBOT_ID, password=ROBOT_PASSWORD) as (robot, robot_rc):
+            assert robot_rc == 0
+            robot.publish(f"robots/{ROBOT_ID}/lidar", '{"ranges":[1.0,2.0]}', qos=0)
+
+        assert _wait_until(lambda: len(received) > 0), (
+            "the backend should receive the robot's own lidar scans"
+        )
+
+
+def test_backend_cannot_publish_lidar():
+    """Same "can't impersonate what only the robot should originate"
+    principle as telemetry/health/status/camera-answer - see
+    test_backend_cannot_publish_robot_telemetry above for why this asserts
+    the specific spoofed payload never arrives rather than "nothing
+    arrives at all" (a real robot may legitimately be publishing lidar
+    scans during this test's window too)."""
+    with mqtt_client(username=BACKEND_USERNAME, password=BACKEND_PASSWORD) as (observer, observer_rc):
+        assert observer_rc == 0
+        received = []
+        observer.on_message = lambda c, u, msg: received.append(msg.payload.decode())
+        observer.subscribe(f"robots/{ROBOT_ID}/lidar", qos=1)
+        time.sleep(0.3)
+
+        spoofed_payload = '{"spoofed": true}'
+        with mqtt_client(username=BACKEND_USERNAME, password=BACKEND_PASSWORD) as (publisher, publisher_rc):
+            assert publisher_rc == 0
+            publisher.publish(f"robots/{ROBOT_ID}/lidar", spoofed_payload, qos=0)
+
+        time.sleep(MESSAGE_TIMEOUT)
+        assert spoofed_payload not in received, (
+            "backend must not be able to publish (impersonate) a robot's lidar scan"
+        )
+
+
 def test_backend_cannot_publish_camera_answer():
     """Backend has `read` on camera/answer, not `readwrite` - same
     "can't impersonate what only the robot should originate" principle as

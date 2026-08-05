@@ -30,6 +30,7 @@ class RobotSummary(BaseModel):
 class RobotDetail(RobotSummary):
     telemetry: Optional[dict] = None
     health: Optional[dict] = None
+    lidar: Optional[dict] = None
 
 
 class ControlRequest(BaseModel):

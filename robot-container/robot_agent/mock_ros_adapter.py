@@ -13,7 +13,16 @@ import threading
 from typing import Callable, Optional
 
 from robot_agent.interfaces import ROSAdapter
-from robot_agent.models import BatteryState, DiagnosticsData, OdometryData
+from robot_agent.models import BatteryState, DiagnosticsData, LaserScanData, OdometryData
+
+# Matches the real Turtlebot3's simulated LDS-01 LIDAR exactly (see
+# real_ros_adapter.py's docstring and docs/05-ros2-integration.md) - 360
+# readings, 1 degree apart, 0.12m-3.5m range - so a scan rendered from the
+# mock adapter looks structurally identical to a real one, not a
+# recognizably-fake stand-in shape.
+_LIDAR_NUM_READINGS = 360
+_LIDAR_RANGE_MIN = 0.12
+_LIDAR_RANGE_MAX = 3.5
 
 
 class MockROSAdapter(ROSAdapter):
@@ -30,6 +39,7 @@ class MockROSAdapter(ROSAdapter):
         self._odometry_callback: Optional[Callable[[OdometryData], None]] = None
         self._diagnostics_callback: Optional[Callable[[DiagnosticsData], None]] = None
         self._battery_callback: Optional[Callable[[BatteryState], None]] = None
+        self._lidar_callback: Optional[Callable[[LaserScanData], None]] = None
 
         self._linear = 0.0
         self._angular = 0.0
@@ -37,6 +47,7 @@ class MockROSAdapter(ROSAdapter):
         self._y = 0.0
         self._heading = 0.0
         self._battery_percentage = 100.0
+        self._scan_phase = 0.0
 
         # Constructors only wire state - starting the background timer is an
         # explicit start(), called by main.py, not a constructor side effect.
@@ -71,6 +82,9 @@ class MockROSAdapter(ROSAdapter):
 
     def subscribe_battery(self, callback: Callable[[BatteryState], None]) -> None:
         self._battery_callback = callback
+
+    def subscribe_lidar(self, callback: Callable[[LaserScanData], None]) -> None:
+        self._lidar_callback = callback
 
     # --- synthetic data generation ---
     def _run(self) -> None:
@@ -113,3 +127,35 @@ class MockROSAdapter(ROSAdapter):
             self._diagnostics_callback(
                 DiagnosticsData(cpu_percent=12.5, memory_percent=34.0, temperature_c=42.0)
             )
+
+        if self._lidar_callback:
+            self._lidar_callback(self._synthetic_scan())
+
+    def _synthetic_scan(self) -> LaserScanData:
+        """A plausible-looking scan, not a real one - an animated
+        "room with a few obstacles" shape (a few sinusoidal harmonics summed
+        together, clamped to this sensor's real min/max range) that shifts
+        slightly over time so a UI watching it doesn't look frozen. Good
+        enough to exercise the whole lidar pipeline (agent -> MQTT ->
+        backend -> frontend) without pretending to model real physics -
+        the same "plausible enough" bar the battery-drain model above
+        already sets."""
+        self._scan_phase += 0.05
+        angle_increment = (2 * math.pi) / _LIDAR_NUM_READINGS
+        ranges = []
+        for i in range(_LIDAR_NUM_READINGS):
+            angle = i * angle_increment
+            distance = (
+                2.0
+                + 0.8 * math.sin(3 * angle + self._scan_phase)
+                + 0.4 * math.sin(7 * angle - self._scan_phase * 2)
+            )
+            ranges.append(round(max(_LIDAR_RANGE_MIN, min(_LIDAR_RANGE_MAX, distance)), 3))
+        return LaserScanData(
+            angle_min=0.0,
+            angle_max=2 * math.pi,
+            angle_increment=angle_increment,
+            range_min=_LIDAR_RANGE_MIN,
+            range_max=_LIDAR_RANGE_MAX,
+            ranges=ranges,
+        )

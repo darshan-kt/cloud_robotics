@@ -1,10 +1,11 @@
 """Interfaces the agent depends on. Concrete implementations are injected
 at composition time (see main.py) - the agent itself never constructs them.
 
-ROSAdapter: today, mock_ros_adapter.py's MockROSAdapter - it actually runs
-in production until Milestone 5 replaces it with ros_ws/'s real rclpy-backed
-implementation via a one-line change in main.py. Nothing in agent.py needs
-to know that happened. This is exactly why robot_agent/ must never import
+ROSAdapter: mock_ros_adapter.py's MockROSAdapter (used for fast, ROS2-free
+unit tests - see robot-container/tests/) and ros_ws/'s RealROSAdapter
+(what main.py actually injects, since Milestone 5). Both implement this
+exact same interface, which is why swapping one for the other never
+touches agent.py. This is exactly why robot_agent/ must never import
 rclpy: doing so would tie this interface's only consumer to one
 implementation, defeating the point of having the interface at all.
 
@@ -15,7 +16,7 @@ see robot-container/tests/fake_mqtt_client.py.
 from abc import ABC, abstractmethod
 from typing import Callable
 
-from robot_agent.models import BatteryState, CameraFrame, DiagnosticsData, OdometryData
+from robot_agent.models import BatteryState, CameraFrame, DiagnosticsData, LaserScanData, OdometryData
 
 
 class ROSAdapter(ABC):
@@ -38,6 +39,10 @@ class ROSAdapter(ABC):
     @abstractmethod
     def subscribe_battery(self, callback: Callable[[BatteryState], None]) -> None:
         """Register a callback fired whenever battery state updates."""
+
+    @abstractmethod
+    def subscribe_lidar(self, callback: Callable[[LaserScanData], None]) -> None:
+        """Register a callback fired whenever a new 2D LIDAR scan arrives."""
 
 
 class MQTTClientInterface(ABC):

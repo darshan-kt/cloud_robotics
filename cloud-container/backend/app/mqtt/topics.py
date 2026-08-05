@@ -46,6 +46,10 @@ def heartbeat_topic_wildcard() -> str:
     return "robots/+/heartbeat"
 
 
+def lidar_topic_wildcard() -> str:
+    return "robots/+/lidar"
+
+
 def camera_offer_topic(robot_id: str) -> str:
     """Backend -> one specific robot (not a wildcard - the backend always
     knows exactly which robot it's relaying an offer to). See

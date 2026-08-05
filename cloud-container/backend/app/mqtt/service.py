@@ -30,6 +30,7 @@ from app.mqtt.topics import (
     cmd_topic,
     health_topic_wildcard,
     heartbeat_topic_wildcard,
+    lidar_topic_wildcard,
     parse_topic,
     status_topic_wildcard,
     telemetry_topic_wildcard,
@@ -132,6 +133,7 @@ class MQTTService:
             health_topic_wildcard(),
             heartbeat_topic_wildcard(),
             camera_answer_topic_wildcard(),
+            lidar_topic_wildcard(),
         ):
             client.subscribe(wildcard, qos=1)
             self._logger.info(f"Re-subscribed to {wildcard}")

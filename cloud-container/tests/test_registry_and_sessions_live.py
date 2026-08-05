@@ -71,7 +71,7 @@ async def _cleanup_robot(pg_pool: asyncpg.Pool, redis_client: redis.Redis, robot
     async with pg_pool.acquire() as conn:
         await conn.execute("DELETE FROM control_sessions WHERE robot_id = $1", robot_id)
         await conn.execute("DELETE FROM robots WHERE robot_id = $1", robot_id)
-    for field in ("status", "last_seen", "telemetry", "health"):
+    for field in ("status", "last_seen", "telemetry", "health", "lidar"):
         await redis_client.delete(f"robot:{robot_id}:{field}")
     await redis_client.delete(f"session:{robot_id}")
 
@@ -101,6 +101,21 @@ async def test_record_telemetry_surfaces_battery_percentage(pg_pool, redis_clien
 
         summary = await registry.get_robot(robot_id)
         assert summary.battery_percentage == 42.5
+    finally:
+        await _cleanup_robot(pg_pool, redis_client, robot_id)
+
+
+async def test_record_lidar_scan_is_readable(pg_pool, redis_client):
+    robot_id = _unique_robot_id()
+    registry = RobotRegistry(pg_pool, redis_client)
+    try:
+        await registry.record_status(robot_id, {"status": "online", "timestamp": time.time()})
+        assert await registry.get_lidar_scan(robot_id) is None  # nothing published yet
+
+        scan_payload = {"timestamp": time.time(), "ranges": [1.0, None, 2.5]}
+        await registry.record_lidar_scan(robot_id, scan_payload)
+
+        assert await registry.get_lidar_scan(robot_id) == scan_payload
     finally:
         await _cleanup_robot(pg_pool, redis_client, robot_id)
 

@@ -13,6 +13,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ApiError, emergencyStop, getRobot } from '../api/client'
 import type { RobotDetail } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
+import { LidarView } from '../components/LidarView'
 import { StatusDot } from '../components/StatusDot'
 import { TeleopPad } from '../components/TeleopPad'
 import { useKeyboardTeleop } from '../hooks/useKeyboardTeleop'
@@ -20,7 +21,14 @@ import { useTeleopSocket } from '../hooks/useTeleopSocket'
 import { useThrottledTeleop } from '../hooks/useThrottledTeleop'
 import { useWebRTCVideo } from '../hooks/useWebRTCVideo'
 
-const POLL_INTERVAL_MS = 2000
+// 500ms - fast enough that the LiDAR panel and telemetry feel genuinely
+// live while driving, not the 2s this polled at before the LiDAR panel
+// existed. Still a plain REST poll of GET /robots/{id}, not a WebSocket -
+// see docs/09-frontend.md's own reasoning for why /ws/status's 2s push is
+// fine for a fleet dashboard; this page is the one place a tighter number
+// actually matters, and polling 2x/sec is negligible load for a single
+// operator's own browser.
+const POLL_INTERVAL_MS = 500
 
 export function Robot() {
   const { robotId } = useParams<{ robotId: string }>()
@@ -102,6 +110,7 @@ export function Robot() {
 
   const telemetry = detail?.telemetry
   const health = detail?.health
+  const lidar = detail?.lidar ?? null
 
   return (
     <div className="space-y-6">
@@ -166,6 +175,14 @@ export function Robot() {
               onStop={stop}
               disabled={!controlEnabled || teleop.state !== 'connected'}
             />
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-medium">LiDAR Scan</h2>
+              <span className="text-xs text-slate-500">{lidar ? `${lidar.ranges.length} pts` : '—'}</span>
+            </div>
+            <LidarView scan={lidar} />
           </div>
 
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-2">

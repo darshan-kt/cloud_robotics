@@ -53,6 +53,12 @@ class RobotRegistry:
         await self._redis.set(_key(robot_id, "health"), json.dumps(payload))
         await self._touch_last_seen(robot_id, payload.get("timestamp"))
 
+    async def record_lidar_scan(self, robot_id: str, payload: dict) -> None:
+        # Same shape as telemetry/health: latest-value-only, no history -
+        # a dashboard polling GET /robots/{id} only ever wants "right now."
+        await self._redis.set(_key(robot_id, "lidar"), json.dumps(payload))
+        await self._touch_last_seen(robot_id, payload.get("timestamp"))
+
     async def record_heartbeat(self, robot_id: str, payload: dict) -> None:
         await self._touch_last_seen(robot_id, payload.get("timestamp"))
 
@@ -92,6 +98,10 @@ class RobotRegistry:
 
     async def get_health(self, robot_id: str) -> Optional[dict]:
         raw = await self._redis.get(_key(robot_id, "health"))
+        return json.loads(raw) if raw else None
+
+    async def get_lidar_scan(self, robot_id: str) -> Optional[dict]:
+        raw = await self._redis.get(_key(robot_id, "lidar"))
         return json.loads(raw) if raw else None
 
     async def _summarize(self, robot_id: str, display_name: str) -> RobotSummary:

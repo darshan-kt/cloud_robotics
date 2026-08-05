@@ -7,7 +7,7 @@ from fake_video_streamer import FakeVideoStreamer
 
 from robot_agent.agent import RobotCloudAgent
 from robot_agent.config import AgentConfig
-from robot_agent.models import CameraFrame, OdometryData
+from robot_agent.models import CameraFrame, LaserScanData, OdometryData
 
 ROBOT_ID = "test-robot"
 
@@ -111,6 +111,40 @@ def test_publish_telemetry_before_any_data_does_not_raise(wired):
     topic, payload, _qos, _retain = mqtt.published[-1]
     assert topic == f"robots/{ROBOT_ID}/telemetry"
     assert json.loads(payload)["battery_percentage"] is None
+
+
+def test_publish_lidar_scan_uses_latest_cached_scan(wired):
+    agent, mqtt, _ros, _video = wired
+    agent._on_lidar_scan(
+        LaserScanData(
+            angle_min=0.0, angle_max=6.28, angle_increment=0.0175, range_min=0.12, range_max=3.5, ranges=[1.0, 2.0]
+        )
+    )
+
+    agent.publish_lidar_scan()
+
+    topic, payload, qos, retain = mqtt.published[-1]
+    assert topic == f"robots/{ROBOT_ID}/lidar"
+    assert qos == 0
+    assert retain is False
+    data = json.loads(payload)
+    assert data["ranges"] == [1.0, 2.0]
+    assert data["range_max"] == 3.5
+    assert agent.get_metrics()["lidar_scans_published"] == 1
+
+
+def test_publish_lidar_scan_before_any_data_publishes_nothing(wired):
+    """Unlike telemetry (which always publishes - see the equivalent
+    telemetry test above), a LaserScan has no meaningful "empty" shape:
+    an all-zero ranges array would render as an obstacle touching the
+    robot on every side, actively misleading rather than just blank. See
+    agent.py's publish_lidar_scan() docstring."""
+    agent, mqtt, _ros, _video = wired
+
+    agent.publish_lidar_scan()  # no lidar callback has fired yet
+
+    assert mqtt.published == []
+    assert agent.get_metrics()["lidar_scans_published"] == 0
 
 
 def test_get_status_reflects_mqtt_connection_state(wired):

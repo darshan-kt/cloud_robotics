@@ -157,7 +157,24 @@ class VideoStreamer:
 
     def _push_buffer(self, frame: CameraFrame) -> None:
         """Runs on the GLib main loop thread - not safe to call directly
-        from any other thread."""
+        from any other thread.
+
+        Rechecks self._negotiating even though push_frame() already checked
+        it - deliberately, not redundantly. That first check runs on the
+        ROS2 callback thread and only decides whether to *schedule* this
+        call via GLib.idle_add(); _prepare_fresh_webrtcbin() (which sets
+        _negotiating and can unlink rtpcaps's src pad mid-teardown) runs on
+        THIS thread. A frame can pass the first check, get queued, and only
+        actually run after negotiation has since started - a real,
+        observed race (confirmed via repeated reconnect cycling: "not-
+        linked" GStreamer pipeline errors after roughly a dozen-plus
+        reconnects, intermittent, not every time - exactly the signature of
+        a narrow scheduling window, not a deterministic bug). Rechecking
+        here, on the only thread that also runs the teardown/relink, closes
+        it for real instead of narrowing the window."""
+        if self._negotiating.is_set():
+            self._frames_dropped_during_negotiation += 1
+            return
         buf = Gst.Buffer.new_wrapped(bytes(frame.data))
         retval = self._appsrc.emit("push-buffer", buf)
         if retval != Gst.FlowReturn.OK:
@@ -244,7 +261,6 @@ class VideoStreamer:
         bus.connect("message", self._on_bus_message)
 
         self._pipeline.set_state(Gst.State.PLAYING)
-        self._webrtcbin.sync_state_with_parent()
 
     def _prepare_fresh_webrtcbin(self, pt: int) -> None:
         """Runs on the GLib main loop thread (see handle_offer) - not safe
@@ -293,39 +309,78 @@ class VideoStreamer:
         )
 
         rtpcaps_src = self._rtpcaps.get_static_pad("src")
-        old_sink_pad = rtpcaps_src.get_peer()
-        if old_sink_pad is not None:
-            rtpcaps_src.unlink(old_sink_pad)
 
-        if self._webrtcbin is not None:
-            self._logger.info("New WebRTC offer arrived - tearing down the previous webrtcbin before answering")
-            old_webrtcbin = self._webrtcbin
-            self._webrtcbin = None
-            old_webrtcbin.set_state(Gst.State.NULL)
-            self._pipeline.remove(old_webrtcbin)
-        elif self._presink is not None:
-            # Very first offer ever - what rtpcaps was linked to was still
-            # the startup fakesink (see _build_pipeline), not a previous
-            # webrtcbin.
-            self._pipeline.remove(self._presink)
-            self._presink.set_state(Gst.State.NULL)
-            self._presink = None
+        # Block this pad before unlinking it - the standard GStreamer
+        # pattern for reconfiguring a PLAYING pipeline (see GStreamer's own
+        # "Dynamic Pipelines" tutorial), and load-bearing here, not
+        # defensive boilerplate: appsrc streams on its OWN internal thread,
+        # independent of the GLib main loop this method itself runs on
+        # (see _run_on_main_loop) - a buffer already past appsrc's internal
+        # queue can arrive at this exact pad mid-unlink with nothing to
+        # write into, which is exactly the "streaming stopped, reason
+        # not-linked" GStreamer pipeline error this project hit under
+        # rapid reconnect cycling (confirmed by a dedicated stress test:
+        # ~15 reconnects in quick succession, intermittent - the signature
+        # of a real scheduling race, not a deterministic bug). Blocking
+        # first guarantees no buffer is in flight through this pad for the
+        # whole unlink/relink below, closing the race instead of narrowing
+        # its window. `blocked.wait()` is timeout-bounded rather than
+        # unconditional, matching every other wait in this file (see
+        # _wait_promise, _run_on_main_loop) - if the pipeline is
+        # momentarily idle and never delivers a blocking buffer, proceeding
+        # anyway after a short timeout is still correct (there's nothing
+        # in flight to race against).
+        blocked = threading.Event()
 
-        webrtcbin = Gst.ElementFactory.make("webrtcbin", None)
-        webrtcbin.set_property("bundle-policy", "max-bundle")
-        webrtcbin.set_property("stun-server", self._stun_server)
-        if self._turn_server:
-            webrtcbin.set_property("turn-server", self._turn_server)
-        self._pipeline.add(webrtcbin)
-        webrtcbin.sync_state_with_parent()
+        def _on_blocked(pad: Gst.Pad, info: Gst.PadProbeInfo) -> Gst.PadProbeReturn:
+            blocked.set()
+            return Gst.PadProbeReturn.OK
 
-        sink_pad = webrtcbin.get_request_pad("sink_%u")
-        link_result = rtpcaps_src.link(sink_pad)
-        if link_result != Gst.PadLinkReturn.OK:
-            raise RuntimeError(f"Failed to link encode chain into the fresh webrtcbin: {link_result}")
+        probe_id = rtpcaps_src.add_probe(Gst.PadProbeType.BLOCK_DOWNSTREAM, _on_blocked)
+        try:
+            if not blocked.wait(timeout=1):
+                self._logger.warning(
+                    "Timed out waiting for the encode chain to quiesce before relinking - proceeding anyway"
+                )
 
-        self._webrtcbin = webrtcbin
-        self._logger.info(f"Linked a fresh webrtcbin for this offer, at payload type {pt}")
+            old_sink_pad = rtpcaps_src.get_peer()
+            if old_sink_pad is not None:
+                rtpcaps_src.unlink(old_sink_pad)
+
+            if self._webrtcbin is not None:
+                self._logger.info("New WebRTC offer arrived - tearing down the previous webrtcbin before answering")
+                old_webrtcbin = self._webrtcbin
+                self._webrtcbin = None
+                old_webrtcbin.set_state(Gst.State.NULL)
+                self._pipeline.remove(old_webrtcbin)
+            elif self._presink is not None:
+                # Very first offer ever - what rtpcaps was linked to was
+                # still the startup fakesink (see _build_pipeline), not a
+                # previous webrtcbin.
+                self._pipeline.remove(self._presink)
+                self._presink.set_state(Gst.State.NULL)
+                self._presink = None
+
+            webrtcbin = Gst.ElementFactory.make("webrtcbin", None)
+            webrtcbin.set_property("bundle-policy", "max-bundle")
+            webrtcbin.set_property("stun-server", self._stun_server)
+            if self._turn_server:
+                webrtcbin.set_property("turn-server", self._turn_server)
+            self._pipeline.add(webrtcbin)
+            webrtcbin.sync_state_with_parent()
+
+            sink_pad = webrtcbin.get_request_pad("sink_%u")
+            link_result = rtpcaps_src.link(sink_pad)
+            if link_result != Gst.PadLinkReturn.OK:
+                raise RuntimeError(f"Failed to link encode chain into the fresh webrtcbin: {link_result}")
+
+            self._webrtcbin = webrtcbin
+            self._logger.info(f"Linked a fresh webrtcbin for this offer, at payload type {pt}")
+        finally:
+            # Always unblock, even on failure - a probe left in place would
+            # permanently wedge the encode chain, which is strictly worse
+            # than the race it exists to prevent.
+            rtpcaps_src.remove_probe(probe_id)
 
     def _on_rtp_buffer(self, pad: Gst.Pad, info: Gst.PadProbeInfo) -> Gst.PadProbeReturn:
         """Runs on GStreamer's own streaming thread (NOT the GLib main loop
