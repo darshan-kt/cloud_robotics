@@ -1,0 +1,14 @@
+# Explicit on purpose, don't rely on BuildKit's undocumented .gitignore
+# fallback behavior to keep these out of the build context. node_modules in
+# particular MUST be excluded: it's built here for the HOST's libc (glibc on
+# most dev machines); the "dev"/"build" stages run on node:20-alpine (musl)
+# and need their own `npm ci` inside the container (see
+# docker/robostore.Dockerfile's "deps" stage) - if the host's node_modules
+# ever leaked into the image via COPY . ., native deps like esbuild's binary
+# would silently mismatch and break Vite at runtime.
+node_modules
+dist
+.git
+.env
+*.local
+npm-debug.log*

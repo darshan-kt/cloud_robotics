@@ -6,6 +6,9 @@ single, tested, AWS-migration-scoped teleop UI, this is a sandbox for
 showcasing new operator-app ideas — a "mission deck" login and hub leading to
 a grid of small robot apps, built and proposed one at a time.
 
+**Login:** `operator@robot.local` / `123456` (any email + a 6-digit-or-longer
+password also works — see "Two data layers" below for why).
+
 ## Why this is a separate app, not new routes in `cloud-container/frontend`
 
 Three concrete reasons, not just taste:
@@ -55,28 +58,58 @@ it yet.
 
 ## Status
 
+**All four apps are built and real**, verified against the actual dev server
+in a real browser (not just typechecked):
+
 | App card | Route | Status |
 |---|---|---|
-| Dashboard | `/dashboard` | Not built — `ComingSoonPage` placeholder |
-| Emergency Stop | `/emergency-stop` | Not built — `ComingSoonPage` placeholder |
-| Remote Controller | `/remote-controller` | Not built — `ComingSoonPage` placeholder |
-| Simple Route Planner | `/simple-route-planner` | Not built — `ComingSoonPage` placeholder |
+| Dashboard | `/dashboard` | Real — 4 tabs (Robot Info, Sensors, Configuration, System), live status strip, heartbeat sparkline, inline-editable config with validation |
+| Emergency Stop | `/emergency-stop` | Real — big E-Stop button, spacebar shortcut, reverse-chronological history log, optimistic UI |
+| Remote Controller | `/remote-controller` | Real — LIDAR HUD canvas, virtual joystick (8-sector angle bucketing), WASD keypad, 10Hz teleop transmit loop, lift simulation |
+| Simple Route Planner | `/simple-route-planner` | Real — three-source map loading (`/map.pgm` → localDb → upload), two-click waypoint placement, layered canvas render (map/plan/waypoints/robot/AMCL), route dispatch with 3-way error handling |
 
-What's real and working today: the standalone login (`/login`, rate-limited
-client-side: 5 failed attempts / 60s → 30s lockout), the protected `/store`
-hub with all four app cards (3D tilt, spotlight, staggered fade-in, keyboard
-operable), the shared UI kit (`Card`/`Badge`/`Button`/`Skeleton`/`EmptyState`/
-`Toast`), and the header's E-Stop badge (event-driven via a `localdb-estop-
-updated` `window` `CustomEvent`) and gateway connection pill (polls
-`GATEWAY_URL/health` every 5s — shows "Not Connected" until an app wires up a
-real gateway, which is correct today).
+`ComingSoonPage.tsx` is kept in the tree, unused, as the placeholder for
+whatever gets proposed as app #5.
 
-Each app in the table above gets built out — swap its `ComingSoonPage` route
-in [`src/App.tsx`](src/App.tsx) for the real page — as it's proposed.
+**Live data is genuinely absent, and that's expected, not broken**: every
+hook that talks to `GATEWAY_URL` (`ws://localhost:1717/...`) fails to connect
+and retries with backoff forever, exactly as designed - the console errors
+you'll see in devtools are that, not a bug. Pages render correctly with no
+data: "OFFLINE"/"Not Connected" pills, "WAITING FOR /scan…" HUD text, "no
+AMCL fix yet". See "Two data layers" above for the Phase 2 plan.
+
+**Decisions made where the build brief was ambiguous or described a
+questionable behavior**, documented in code comments at the point of
+decision, listed here too so they're not buried:
+
+- **E-Stop button labels** (`EmergencyStopPage.tsx`) — the brief's
+  "armed → STOP ENGAGED" / "active → STOP RELEASED" pairing reads backwards
+  from how a physical E-stop's latch is normally named. Labeled by current
+  state instead: "SYSTEM ARMED" (idle) / "E-STOP ACTIVE" (triggered) - never
+  ambiguous about what the button will do.
+- **Remote Controller's "EMERGENCY STOP" button** (`RemoteControllerPage.tsx`)
+  — the brief describes it as cosmetic (zeroes velocity, shows a toast, never
+  touches the real E-Stop registry). Built as a real safety footgun if copied
+  as-is: a button labeled EMERGENCY STOP that the header badge, the Emergency
+  Stop page's history, and the Route Planner's dispatch guard would all stay
+  blind to. Wired it to the same `localDb.triggerEmergencyStop()` the
+  dedicated page uses - it only ever triggers, never releases, matching that
+  page's "release is always a deliberate click" rule.
+- **Distance-remaining readout** (`SimpleRoutePlannerPage.tsx`) — the live
+  robot marker's position (`telemetry.x/y`) is documented to already be in
+  canvas-pixel space, not meters, so it can't be subtracted from the Nav2
+  plan's real map-frame-meter goal to produce a physically meaningful number.
+  Used the AMCL pose (`localisation`, real meters, same frame as the plan)
+  instead; shows "—" with no AMCL fix yet rather than a fabricated distance.
 
 ## Running it
 
-Standalone dev server, not part of `docker compose` yet:
+## Running it
+
+Two ways — full step-by-step for both is in the root
+[`README.md`](../README.md#running-robostore), this is the short version.
+
+**npm, on the host** (instant hot-reload while editing):
 
 ```bash
 cd robostore-poc
@@ -84,16 +117,33 @@ npm install
 npm run dev              # http://localhost:3100
 ```
 
-`cloud-container/frontend` (the real console) still runs on 3000 — both can
-run side by side.
-
 ```bash
 npm run build             # tsc --noEmit && vite build -> dist/
 npm run preview            # serve the production build locally
 ```
 
-Set `VITE_GATEWAY_URL` (see `.env.example`) once an app actually needs live
-data; until then it's unused.
+**Docker, via the root Makefile** (own Compose file, own Compose project
+`robostore-poc` — never mixed into the main stack's `docker compose`/`make`
+commands):
+
+```bash
+make robostore-up          # dev target, http://localhost:3100 - from repo root
+make robostore-up-prod       # nginx-served build, http://localhost:3101
+make robostore-down            # stop it
+```
+
+See [`docker-compose.robostore.yml`](../docker-compose.robostore.yml) and
+[`docker/robostore.Dockerfile`](docker/robostore.Dockerfile) — same dev/prod
+two-target shape as `cloud-container/docker/frontend.Dockerfile`. No bind
+mount for the dev target (matches that file too), so under Docker an edit
+needs `make robostore-up` run again to rebuild; under npm on the host it's
+instant Vite HMR.
+
+`cloud-container/frontend` (the real console) still runs on 3000 — all of
+the above can run side by side with it.
+
+Set `VITE_GATEWAY_URL` (see `.env.example` at the repo root) once an app
+actually needs live data; until then it's unused.
 
 ## Project structure
 
@@ -103,13 +153,24 @@ src/
     layout/     Header, ProtectedRoute
     ui/         Card, Badge, Button, Skeleton, EmptyState, Toast
   hooks/        useAuth (stub session)
-  lib/          config, idb, localDb, utils
-  pages/        LoginPage, AppStorePage, ComingSoonPage
+                useReconnectingSocket (shared reconnect-with-backoff shell)
+                useTelemetry, useLocalisation, usePlan, useScan, useVelocityCtrl
+  lib/          config, idb, localDb, pgmParser, utils
+  pages/        LoginPage, AppStorePage, ComingSoonPage (unused placeholder)
+                DashboardPage, EmergencyStopPage, RemoteControllerPage,
+                SimpleRoutePlannerPage
   types/        data model interfaces
   App.tsx       routes
   main.tsx      entry
   index.css     design tokens, aurora background, hub animations
 ```
+
+Note on `RemoteControllerPage.tsx`: per the build brief, it does NOT use the
+shared `useTelemetry` hook - it hand-rolls its own inline `/api/telemetry`
+connection with a flat 3s reconnect (no backoff) and a custom text-frame
+`ping`/`pong` latency probe layered on the same socket, both deliberate
+deviations documented in a comment at the top of that file. Every other
+WebSocket-driven page uses the shared hooks normally.
 
 ## Design tokens
 

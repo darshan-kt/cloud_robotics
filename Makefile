@@ -26,10 +26,20 @@ FRONTEND_PORT ?= 3000
 ROBOT_HEALTH_PORT ?= 8080
 OPERATOR_USERNAME ?= operator
 OPERATOR_PASSWORD ?= operator_dev_password
+ROBOSTORE_PORT ?= 3100
+ROBOSTORE_PROD_PORT ?= 3101
+# ROBOSTORE's auth is a stub (robostore-poc/src/hooks/useAuth.ts) - ANY email
+# + a 6-digit-or-longer password signs in. These are just the example pair
+# printed below and in README.md, not a real, enforced credential - there's
+# nothing to configure or rotate here, unlike OPERATOR_USERNAME/PASSWORD above.
+ROBOSTORE_EMAIL ?= operator@robot.local
+ROBOSTORE_DEMO_PASSWORD ?= 123456
 
 .DEFAULT_GOAL := help
 .PHONY: help setup build up up-test-pattern up-camera gzclient down restart restart-robot \
-        ps status logs health token open test test-robot test-cloud clean prune _wait-healthy _xhost
+        ps status logs health token open test test-robot test-cloud clean prune _wait-healthy _xhost \
+        robostore-build robostore-up robostore-up-prod robostore-down robostore-ps robostore-logs \
+        robostore-open _robostore-wait
 
 help: ## Show this help
 	@echo "Cloud Robotics Platform - available targets:"
@@ -131,6 +141,42 @@ test-robot: ## Run only the robot_agent unit tests, inside the live robot contai
 test-cloud: ## Run only the backend + real-browser frontend E2E tests, on the host, against the live stack
 	pip install -q -r cloud-container/tests/requirements.txt
 	pytest cloud-container/tests/ -v
+
+## --- ROBOSTORE (robostore-poc/, demo app-store console, POC) ---
+## Entirely separate from the stack above - its own compose file
+## (docker-compose.robostore.yml), own Compose project, own containers.
+## The main stack does NOT need to be running for any of these. See
+## robostore-poc/README.md.
+
+robostore-build: ## Build the ROBOSTORE dev image
+	docker compose -f docker-compose.robostore.yml build robostore
+
+robostore-up: robostore-build ## Start ROBOSTORE standalone (Vite dev server), independent of the main stack
+	docker compose -f docker-compose.robostore.yml up -d --build robostore
+	@$(MAKE) --no-print-directory _robostore-wait
+	@echo "ROBOSTORE is up: http://localhost:$(ROBOSTORE_PORT)  (login: $(ROBOSTORE_EMAIL) / $(ROBOSTORE_DEMO_PASSWORD) - or any email + 6-digit password)"
+
+robostore-up-prod: ## Start ROBOSTORE's compiled nginx build (proves the prod target works), on a separate port from the dev target
+	docker compose -f docker-compose.robostore.yml --profile prod up -d --build robostore-prod
+	@echo "ROBOSTORE (prod build) is up: http://localhost:$(ROBOSTORE_PROD_PORT)  (login: $(ROBOSTORE_EMAIL) / $(ROBOSTORE_DEMO_PASSWORD) - or any email + 6-digit password)"
+
+_robostore-wait:
+	@echo "Waiting for ROBOSTORE's dev server..."
+	@until curl -sf http://localhost:$(ROBOSTORE_PORT)/ >/dev/null 2>&1; do sleep 1; done
+
+robostore-down: ## Stop ROBOSTORE (both the dev and prod-profile containers, if running)
+	docker compose -f docker-compose.robostore.yml --profile prod down
+
+robostore-ps: ## Show ROBOSTORE container status
+	docker compose -f docker-compose.robostore.yml --profile prod ps
+
+robostore-logs: ## Tail ROBOSTORE's logs
+	docker compose -f docker-compose.robostore.yml logs -f robostore
+
+robostore-open: ## Open ROBOSTORE in your default browser
+	@xdg-open http://localhost:$(ROBOSTORE_PORT) 2>/dev/null \
+		|| open http://localhost:$(ROBOSTORE_PORT) 2>/dev/null \
+		|| echo "Open http://localhost:$(ROBOSTORE_PORT) manually"
 
 ## --- Cleanup ---
 

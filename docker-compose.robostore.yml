@@ -1,0 +1,52 @@
+# Standalone compose file for ROBOSTORE (robostore-poc/) - the demo app-store
+# console. Deliberately its own file, not folded into docker-compose.yml and
+# not an overlay ON docker-compose.yml (unlike docker-compose.camera.yml,
+# which only makes sense combined with the main file) - see
+# robostore-poc/README.md for why this is a fully separate app.
+#
+# Runs completely independently - the main stack does NOT need to be up:
+#
+#   docker compose -f docker-compose.robostore.yml up -d --build
+#
+# `name:` pins its own Compose project, so it never shares a default network
+# or gets mixed into `docker compose ps` output with the main
+# "cloud-robotics" project, regardless of which directory you run it from.
+name: robostore-poc
+
+services:
+  # Default target: the Vite dev server (hot-reload, matches how
+  # cloud-container/frontend's own compose entry always runs "dev" too).
+  # This is the one `make robostore-up` starts.
+  robostore:
+    build:
+      context: ./robostore-poc
+      dockerfile: docker/robostore.Dockerfile
+      target: dev
+    container_name: robostore-poc
+    ports:
+      - "${ROBOSTORE_PORT:-3100}:3100"
+    environment:
+      # Read by the Vite dev server at request time. Must be a
+      # BROWSER-reachable address, same reasoning as cloud-container's
+      # API_BASE_URL/VITE_API_BASE_URL - never an internal Docker service name.
+      VITE_GATEWAY_URL: ${VITE_GATEWAY_URL:-http://localhost:1717}
+
+  # Opt-in only (`--profile prod`) - the compiled static bundle served by
+  # nginx, on a DIFFERENT port (80 inside the container, not 3100 - nginx
+  # doesn't know about Vite's dev port) so it can run alongside the dev
+  # target above without a port clash. Exists to prove this app is just as
+  # deployable as the real console; nothing points a real deployment at it.
+  robostore-prod:
+    profiles: ["prod"]
+    build:
+      context: ./robostore-poc
+      dockerfile: docker/robostore.Dockerfile
+      target: prod
+      args:
+        # Baked in at BUILD time for this target (Vite inlines
+        # import.meta.env.* into the bundle) - unlike the dev service above,
+        # changing this after the image is built means rebuilding.
+        VITE_GATEWAY_URL: ${VITE_GATEWAY_URL:-http://localhost:1717}
+    container_name: robostore-poc-prod
+    ports:
+      - "${ROBOSTORE_PROD_PORT:-3101}:80"

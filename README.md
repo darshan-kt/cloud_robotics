@@ -88,18 +88,22 @@ This is being implemented one milestone at a time. Each milestone is reviewed an
 ## ROBOSTORE (demo app-store console, POC)
 
 [`robostore-poc/`](robostore-poc/) is a second, independent frontend for
-showcasing new operator-app ideas before they're built for real — a separate
-login and "mission deck" hub leading to a grid of small robot apps
-(Dashboard, Emergency Stop, Remote Controller, Simple Route Planner),
-proposed and built one at a time. It's a deliberately separate React app
-(different framework versions, different design system) so nothing in it can
-destabilize the real console above — see [`robostore-poc/README.md`](robostore-poc/README.md)
-for the full rationale, its two-data-layer split, and how each app moves
-from a placeholder card to something real.
+showcasing new operator-app ideas — a separate login and "mission deck" hub
+leading to four working apps (Dashboard, Emergency Stop, Remote Controller,
+Simple Route Planner), each proposed and built one at a time, all real now.
+It's a deliberately separate React app (different framework versions,
+different design system) so nothing in it can destabilize the real console
+above — see [`robostore-poc/README.md`](robostore-poc/README.md) for the
+full rationale, its two-data-layer split (why every app currently renders
+with no live data, and how that gets wired up for real later), and the
+decisions made where its build brief was ambiguous.
 
-```bash
-cd robostore-poc && npm install && npm run dev   # http://localhost:3100
-```
+**Login:** `operator@robot.local` / `123456` (any email + a 6-digit-or-longer
+password also works — this is a stub gate, not real auth, see
+`robostore-poc/README.md`).
+
+Full step-by-step run instructions are their own section, separate from the
+main system's below: [Running ROBOSTORE](#running-robostore).
 
 ## Running it
 
@@ -214,6 +218,87 @@ make test-cloud         # just backend + frontend E2E (needs the stack already u
 See [`docs/10-testing-strategy.md`](docs/10-testing-strategy.md) for what each layer actually proves and why a real Chrome browser is involved, not a mock.
 
 No real robot behavior without the stack running — see [Status](#status) below and [`docs/02-docker-foundations.md`](docs/02-docker-foundations.md) for exactly what does and doesn't work today.
+
+## Running ROBOSTORE
+
+This is entirely separate from the "Running it" steps above — the main stack
+does not need to be running for ROBOSTORE's login and hub to work, and
+ROBOSTORE's containers (if you use them) are a completely different Compose
+project from the main stack's (`cloud-robotics`). See [ROBOSTORE](#robostore-demo-app-store-console-poc)
+above for what it is and why it's a separate app.
+
+Two ways to run it — pick whichever fits what you're doing:
+
+| | npm (Option A) | Docker (Option B) |
+|---|---|---|
+| Best for | Actively editing ROBOSTORE's code — instant hot-reload | Matching how the rest of this project runs, or if you don't want Node installed on the host |
+| Prerequisite | Node.js 20+ and npm | Docker + Docker Compose v2 |
+| Edit → see it | Instant (Vite HMR) | Re-run `make robostore-up` (rebuilds, ~seconds — no bind mount, same tradeoff `cloud-container/frontend` makes) |
+
+### Option A — npm, on the host
+
+```bash
+cd robostore-poc
+npm install
+npm run dev
+```
+
+Vite prints the local URL — `http://localhost:3100` by default (see
+`vite.config.ts`), deliberately not 3000 so it can run side by side with the
+real operator console (`cloud-container/frontend`) if that's up too. Stop
+with `Ctrl+C` — nothing else to tear down.
+
+Optional production build: `npm run build` (`tsc --noEmit && vite build` →
+`robostore-poc/dist/`), then `npm run preview` to serve it locally.
+
+### Option B — Docker, via the Makefile
+
+```bash
+make robostore-up          # builds + starts the dev-target container, waits until it responds
+make robostore-open         # opens it in your default browser
+make robostore-logs          # tail its logs
+make robostore-ps             # container status
+make robostore-down            # stop it
+```
+
+This uses [`docker-compose.robostore.yml`](docker-compose.robostore.yml) —
+its own file, own `name:` (Compose project `robostore-poc`), never mixed
+into `make ps`/`make logs` for the main stack. `ROBOSTORE_PORT` (default
+3100) and `VITE_GATEWAY_URL` are overridable the same way as every other
+port/URL in this project — see `.env.example`.
+
+There's also a `prod` profile that builds and serves the compiled static
+bundle through nginx instead of Vite's dev server, on a separate port
+(3101), the same way `cloud-container/frontend`'s `prod` target does:
+
+```bash
+make robostore-up-prod      # http://localhost:3101 - nginx serving the built bundle
+```
+
+### Signing in and what's there today (both options)
+
+**Login: `operator@robot.local` / `123456`** — printed by `make robostore-up`/
+`make robostore-up-prod` too (`ROBOSTORE_EMAIL`/`ROBOSTORE_DEMO_PASSWORD` in
+the Makefile, overridable the same way as `OPERATOR_USERNAME`/`OPERATOR_PASSWORD`
+above, though there's nothing to actually get wrong here). This is a stub
+gate, not real auth (see `robostore-poc/README.md`) — **any email address +
+a 6-digit-or-longer password** signs in, that example pair is just the one
+this project documents consistently everywhere. Session persists in
+`localStorage`, so a refresh keeps you signed in; use the sign-out icon
+(top-right) to leave.
+
+You land on `/store` — four app cards, and **all four are real, working
+apps** now, not placeholders: Dashboard (tabbed robot info/sensors/config/
+system view), Emergency Stop (big button, spacebar shortcut, history log),
+Remote Controller (LIDAR HUD, joystick, WASD teleop), and Simple Route
+Planner (click-to-place waypoints on a map, dispatches a route). The
+header's two live pills (E-Stop state, gateway connection) are real and
+working too: E-Stop is event-driven from `localStorage`/IndexedDB, and the
+connection pill correctly shows "Not Connected" - there's no live gateway
+behind any of the four apps yet (see `robostore-poc/README.md`'s two-data-
+layer section), so every app renders correctly with **no data**: "OFFLINE"
+pills, "WAITING FOR /scan…" HUD text, "no AMCL fix yet". That's expected,
+not broken.
 
 ## Status
 
