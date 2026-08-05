@@ -60,7 +60,8 @@ Two containers, two clear responsibilities:
 cloud-robotics/
 ├── docs/              # Numbered learning docs — read these first
 ├── robot-container/   # ROS2 + Turtlebot3 + Robot Cloud Agent
-└── cloud-container/   # FastAPI + MQTT broker + Redis + Postgres + React
+├── cloud-container/   # FastAPI + MQTT broker + Redis + Postgres + React
+└── robostore-poc/     # Standalone demo app-store console — see below
 ```
 
 See [`docs/01-repository-structure.md`](docs/01-repository-structure.md) for a full walkthrough of every folder and why it exists. (A visual version of this same tree: [`docs/images/repo-layout.png`](docs/images/repo-layout.png).)
@@ -83,6 +84,22 @@ This is being implemented one milestone at a time. Each milestone is reviewed an
 - [x] 9. Frontend (React + TypeScript + Tailwind, keyboard teleop — verified against a real, unmodified Chrome browser, see below)
 - [x] 10. Full end-to-end integration + test suite (80/80 tests, one command — see below)
 - [x] 11. Final documentation pass (diagrams, API/MQTT reference, deployment & AWS migration guides — see below)
+
+## ROBOSTORE (demo app-store console, POC)
+
+[`robostore-poc/`](robostore-poc/) is a second, independent frontend for
+showcasing new operator-app ideas before they're built for real — a separate
+login and "mission deck" hub leading to a grid of small robot apps
+(Dashboard, Emergency Stop, Remote Controller, Simple Route Planner),
+proposed and built one at a time. It's a deliberately separate React app
+(different framework versions, different design system) so nothing in it can
+destabilize the real console above — see [`robostore-poc/README.md`](robostore-poc/README.md)
+for the full rationale, its two-data-layer split, and how each app moves
+from a placeholder card to something real.
+
+```bash
+cd robostore-poc && npm install && npm run dev   # http://localhost:3100
+```
 
 ## Running it
 
