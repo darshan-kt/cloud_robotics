@@ -1,0 +1,249 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border/50;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-text font-sans antialiased;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* Aurora background: four slow-drifting, hue-rotating radial gradients
+     behind all content. Fixed + z-index -1 + pointer-events none so it never
+     interferes with layout or interaction. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at 15% 20%, rgba(0, 229, 160, 0.16), transparent 40%),
+      radial-gradient(circle at 85% 15%, rgba(56, 189, 248, 0.14), transparent 40%),
+      radial-gradient(circle at 75% 80%, rgba(0, 229, 160, 0.1), transparent 45%),
+      radial-gradient(circle at 20% 85%, rgba(139, 92, 246, 0.14), transparent 45%);
+    animation: aurora-drift 36s ease-in-out infinite alternate;
+  }
+
+  @keyframes aurora-drift {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+      filter: hue-rotate(0deg);
+    }
+    100% {
+      transform: translate3d(-2%, 2%, 0) scale(1.05);
+      filter: hue-rotate(25deg);
+    }
+  }
+
+  /* Thin themed scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0a1b20;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2b4d58;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #38636f;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  .stagger-1 {
+    animation-delay: 100ms;
+  }
+  .stagger-2 {
+    animation-delay: 200ms;
+  }
+  .stagger-3 {
+    animation-delay: 300ms;
+  }
+  .stagger-4 {
+    animation-delay: 400ms;
+  }
+  .stagger-5 {
+    animation-delay: 500ms;
+  }
+
+  /* ---- Hub-only effects (AppStorePage), prefixed hub-* ---- */
+
+  .hub-grid-floor {
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 50%;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(0, 229, 160, 0.18) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 229, 160, 0.18) 1px, transparent 1px);
+    background-size: 48px 48px;
+    transform: perspective(400px) rotateX(60deg) translateY(0);
+    transform-origin: bottom;
+    mask-image: linear-gradient(to top, black, transparent);
+    -webkit-mask-image: linear-gradient(to top, black, transparent);
+    animation: hub-floor-scroll 4s linear infinite;
+  }
+
+  @keyframes hub-floor-scroll {
+    from {
+      background-position: 0 0;
+    }
+    to {
+      background-position: 0 48px;
+    }
+  }
+
+  .hub-gradient-text {
+    background: linear-gradient(90deg, #00e5a0, #38bdf8, #8b5cf6, #00e5a0);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: hub-gradient-pan 8s linear infinite;
+  }
+
+  @keyframes hub-gradient-pan {
+    from {
+      background-position: 0% 50%;
+    }
+    to {
+      background-position: 300% 50%;
+    }
+  }
+
+  .hub-cursor {
+    display: inline-block;
+    width: 0.55ch;
+    background: currentColor;
+    animation: hub-blink 1s step-end infinite;
+  }
+
+  @keyframes hub-blink {
+    0%,
+    50% {
+      opacity: 1;
+    }
+    50.01%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  .hub-ticker-track {
+    display: flex;
+    width: max-content;
+    animation: hub-ticker-scroll 28s linear infinite;
+  }
+
+  .hub-ticker-track:hover {
+    animation-play-state: paused;
+  }
+
+  @keyframes hub-ticker-scroll {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  .hub-card {
+    --glow: 0, 229, 160;
+    --mx: 50%;
+    --my: 50%;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+  }
+
+  .hub-card::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: conic-gradient(
+      from var(--beam-angle, 0deg),
+      rgba(var(--glow), 0.9),
+      transparent 30%,
+      transparent 70%,
+      rgba(var(--glow), 0.9)
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.2s ease-out;
+    animation: hub-beam-spin 4s linear infinite;
+    pointer-events: none;
+  }
+
+  .hub-card:hover::before {
+    opacity: 1;
+  }
+
+  @keyframes hub-beam-spin {
+    from {
+      --beam-angle: 0deg;
+    }
+    to {
+      --beam-angle: 360deg;
+    }
+  }
+
+  .hub-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(
+      220px circle at var(--mx) var(--my),
+      rgba(var(--glow), 0.14),
+      transparent 65%
+    );
+    opacity: 0;
+    transition: opacity 0.2s ease-out;
+    pointer-events: none;
+  }
+
+  .hub-card:hover::after {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hub-grid-floor,
+    .hub-gradient-text,
+    .hub-cursor,
+    .hub-ticker-track,
+    .hub-card::before {
+      animation: none !important;
+    }
+  }
+}
