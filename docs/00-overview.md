@@ -69,6 +69,8 @@ sequenceDiagram
     BE-->>Op: /ws/status push (every 2s)
 ```
 
+*Static image version (for viewers without live Mermaid rendering): [`docs/images/command-path.png`](images/command-path.png).*
+
 ### Path 2 — Video (the "media plane")
 
 ```
@@ -102,6 +104,8 @@ sequenceDiagram
 ```
 
 Note the last diagram's punchline: `BE` only ever sees SDP *text* (twice - the offer relay in, the answer relay back out), never a single video byte. Every arrow carrying actual media (`VS->>Op`) bypasses the backend entirely, exactly as the Path 2 diagram above promises. See [`docs/08-webrtc-signalling.md`](08-webrtc-signalling.md) for why signalling needed its own MQTT topics, and [`docs/09-frontend.md`](09-frontend.md) for why the TURN hop turned out to be load-bearing, not optional, against a real browser.
+
+*Static image version: [`docs/images/video-path.png`](images/video-path.png). Full system topology as one picture: [`docs/images/architecture-overview.png`](images/architecture-overview.png).*
 
 ## Why it's needed
 

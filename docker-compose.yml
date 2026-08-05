@@ -245,6 +245,21 @@ services:
       # See coturn service above and docs/09-frontend.md for why this
       # exists alongside plain STUN.
       TURN_SERVER_URL: turn://${TURN_USERNAME:-turnuser}:${TURN_PASSWORD:-turn_dev_password}@host.docker.internal:${TURN_PORT:-3478}
+      # Gazebo's GUI (gzclient) - purely a local dev convenience, entirely
+      # conditional on this actually being set (see simulation.launch.py,
+      # which checks it at launch time and runs headless exactly as before
+      # if it's empty). `${DISPLAY:-}` reads the HOST's own DISPLAY (the
+      # value `docker compose` itself was run with) - on a real headless
+      # server/CI this is simply empty and nothing changes. See README.md's
+      # "Watching the simulation visually".
+      DISPLAY: ${DISPLAY:-}
+      QT_X11_NO_MITSHM: "1"
+    volumes:
+      # Bind-mounting a host path that doesn't exist just yields an empty
+      # directory in the container (unlike `devices:`, which hard-fails) -
+      # safe even on hosts with no X11 socket at all; combined with the
+      # DISPLAY gate above, gzclient is never even attempted there.
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
     depends_on:
       coturn:
         condition: service_started

@@ -81,6 +81,8 @@ flowchart LR
     VS == "DTLS-SRTP media" ==> OpBrowser
 ```
 
+*Static image version: [`docs/images/aws-topology.png`](images/aws-topology.png).*
+
 Compare this against [`docs/00-overview.md`](00-overview.md)'s local topology diagram - every box has a 1:1 counterpart; the arrows (and what's allowed to cross each boundary) are identical.
 
 ### Migration runbook (ordered)

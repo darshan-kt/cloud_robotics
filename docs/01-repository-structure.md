@@ -34,6 +34,8 @@ Each folder maps to one responsibility, so that a new contributor (or future you
 | `tests/` | Unit tests for `robot_agent/` (run without ROS2 or hardware, using the mock `ROSAdapter`) and integration tests that do need ROS2. | Milestone 4–5 |
 | `docs/` | Robot-side implementation notes that are too low-level for the top-level learning docs. | As needed |
 
+![Folder structure of both containers, robot-container and cloud-container side by side](images/repo-layout.png)
+
 ### `cloud-container/`
 
 | Folder | Purpose | Filled in during |

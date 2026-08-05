@@ -30,5 +30,6 @@ Each doc follows the same three-part shape:
 Not part of the reading order above — for looking something up, not reading start to finish:
 
 - [API & MQTT Reference](api-reference.md) — every REST endpoint, WebSocket message shape, and MQTT topic in one place, pulled directly from the current code.
+- [Configuration Reference](configuration-reference.md) — every `.env` variable and YAML config key, which container reads it, the ROS2 ⇄ MQTT ⇄ REST topic/field mapping, and what to check before/after changing something — including real-robot and AWS migration precautions.
 
 Root-level architecture, folder layout, and deployment references also live at the top of the repo — see the main [`README.md`](../README.md) for the roadmap checklist.

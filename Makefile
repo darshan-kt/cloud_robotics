@@ -28,8 +28,8 @@ OPERATOR_USERNAME ?= operator
 OPERATOR_PASSWORD ?= operator_dev_password
 
 .DEFAULT_GOAL := help
-.PHONY: help setup build up up-test-pattern up-camera up-gui gzclient down restart restart-robot \
-        ps status logs health token open test test-robot test-cloud clean prune
+.PHONY: help setup build up up-test-pattern up-camera gzclient down restart restart-robot \
+        ps status logs health token open test test-robot test-cloud clean prune _wait-healthy _xhost
 
 help: ## Show this help
 	@echo "Cloud Robotics Platform - available targets:"
@@ -47,7 +47,7 @@ build: setup ## Build all Docker images (backend, frontend, robot)
 
 ## --- Running the stack ---
 
-up: setup ## Start the full stack (7 services), waiting for health checks. No real webcam feed unless you also use `make up-camera` or `make up-test-pattern`.
+up: setup _xhost ## Start the full stack (7 services). Gazebo's GUI opens automatically if DISPLAY is set (see README.md); no real webcam feed unless you also use `make up-camera` or `make up-test-pattern`.
 	docker compose up -d --build
 	@$(MAKE) --no-print-directory _wait-healthy
 	@echo
@@ -56,30 +56,33 @@ up: setup ## Start the full stack (7 services), waiting for health checks. No re
 	@echo "  Backend:  http://localhost:$(BACKEND_PORT)/health"
 	@echo "  Robot:    http://localhost:$(ROBOT_HEALTH_PORT)/health"
 
-up-test-pattern: setup ## Start the stack with a SYNTHETIC camera pattern (no physical webcam needed) - see docs/06-video-streaming.md
+up-test-pattern: setup _xhost ## Start the stack with a SYNTHETIC camera pattern (no physical webcam needed) - see docs/06-video-streaming.md
 	CAMERA_TEST_PATTERN_FALLBACK=true docker compose up -d --build
 	@$(MAKE) --no-print-directory _wait-healthy
 	@echo "Stack is up with a synthetic test-pattern camera feed. Console: http://localhost:$(FRONTEND_PORT)"
 
-up-camera: setup ## Start the stack with your REAL webcam passed through (requires CAMERA_DEVICE in .env, default /dev/video0) - see docker-compose.camera.yml
+up-camera: setup _xhost ## Start the stack with your REAL webcam passed through (requires CAMERA_DEVICE in .env, default /dev/video0) - see docker-compose.camera.yml
 	docker compose -f docker-compose.yml -f docker-compose.camera.yml up -d --build
 	@$(MAKE) --no-print-directory _wait-healthy
 	@echo "Stack is up with a real webcam feed. Console: http://localhost:$(FRONTEND_PORT)"
 
-up-gui: setup ## Start the stack with the host's X11 display passed through to the robot container, for `make gzclient` (visual Gazebo debugging) - see docker-compose.gui.yml
-	@command -v xhost >/dev/null 2>&1 && xhost +local:docker >/dev/null 2>&1 || true
-	docker compose -f docker-compose.yml -f docker-compose.gui.yml up -d --build
-	@$(MAKE) --no-print-directory _wait-healthy
-	@echo "Stack is up with X11 passthrough. Run 'make gzclient' to open the Gazebo GUI."
-	@echo "Tip: combine with a camera source too, e.g. 'CAMERA_TEST_PATTERN_FALLBACK=true make up-gui'."
-
-gzclient: ## Open Gazebo's GUI window, attached to the already-running simulation (run `make up-gui` first)
+gzclient: ## Re-open Gazebo's GUI window by hand (it already opens automatically on `make up`/`docker compose up` if DISPLAY is set - this is only for reattaching after closing it)
 	docker exec -it cloud-robotics-robot gzclient
 
 _wait-healthy:
 	@echo "Waiting for backend + robot health checks..."
 	@until curl -sf http://localhost:$(BACKEND_PORT)/health >/dev/null 2>&1; do sleep 1; done
 	@until curl -sf http://localhost:$(ROBOT_HEALTH_PORT)/health >/dev/null 2>&1; do sleep 1; done
+
+# Grants local Docker containers access to the host's X server, so the
+# robot container's auto-launched gzclient can actually open a window -
+# see docker-compose.yml's robot service and simulation.launch.py. Best-
+# effort and silent: on a host with no X server (or no `xhost` binary -
+# e.g. Windows/macOS Docker Desktop, a headless server) this is a no-op,
+# never a failure - DISPLAY simply won't be set either, and the launch
+# file already runs headless in that case regardless of this step.
+_xhost:
+	@command -v xhost >/dev/null 2>&1 && xhost +local:docker >/dev/null 2>&1 || true
 
 down: ## Stop the stack (keeps volumes - Postgres/Redis/Mosquitto data survives)
 	docker compose down

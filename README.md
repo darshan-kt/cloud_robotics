@@ -4,11 +4,36 @@ A local, Docker-based simulation of a **production cloud robotics platform** —
 
 It is built to run entirely on one machine today and move to AWS later **without an architectural rewrite** — only endpoints change (`localhost` → real AWS service addresses). See [`docs/00-overview.md`](docs/00-overview.md) for why the system is shaped the way it is, and [`docs/11-aws-migration.md`](docs/11-aws-migration.md) for the concrete migration path.
 
+## See it running
+
+Real captures of the actual stack - a terminal bringing it up, and the actual browser console driving a real robot. Not mockups; see [`docs/images/README.md`](docs/images/README.md) for exactly how these were made.
+
+<table>
+<tr>
+<td width="50%">
+
+**`docker compose up` → a live robot**
+
+![Terminal bringing up the full stack](docs/images/terminal-startup.gif)
+
+</td>
+<td width="50%">
+
+**Login → live video + LiDAR → drive it**
+
+![Web console: login, dashboard, live camera and LiDAR, teleop](docs/images/web-console-walkthrough.gif)
+
+</td>
+</tr>
+</table>
+
 ## New here? Start with the docs
 
-This repository is being built **milestone by milestone**, and every milestone gets a companion doc in [`docs/`](docs/) written to teach the concept, not just describe the code. Read them in order — they're numbered for that reason. Start at [`docs/README.md`](docs/README.md). Looking something up rather than reading start to finish? See [`docs/api-reference.md`](docs/api-reference.md) for every REST/WebSocket/MQTT contract in one place.
+This repository is being built **milestone by milestone**, and every milestone gets a companion doc in [`docs/`](docs/) written to teach the concept, not just describe the code. Read them in order — they're numbered for that reason. Start at [`docs/README.md`](docs/README.md). Looking something up rather than reading start to finish? See [`docs/api-reference.md`](docs/api-reference.md) for every REST/WebSocket/MQTT contract, or [`docs/configuration-reference.md`](docs/configuration-reference.md) for every `.env`/config parameter, the ROS2 ⇄ MQTT ⇄ REST topic mapping, and real-robot/AWS migration precautions.
 
 ## Architecture at a glance
+
+![System architecture: both containers, every service, both data paths](docs/images/architecture-overview.png)
 
 **Command path** (browser → robot):
 
@@ -38,9 +63,12 @@ cloud-robotics/
 └── cloud-container/   # FastAPI + MQTT broker + Redis + Postgres + React
 ```
 
-See [`docs/01-repository-structure.md`](docs/01-repository-structure.md) for a full walkthrough of every folder and why it exists.
+See [`docs/01-repository-structure.md`](docs/01-repository-structure.md) for a full walkthrough of every folder and why it exists. (A visual version of this same tree: [`docs/images/repo-layout.png`](docs/images/repo-layout.png).)
 
 ## Build roadmap
+
+<img src="docs/images/milestone-roadmap.png" alt="All 11 milestones plus the post-Milestone-11 LiDAR addition, in build order" width="360">
+
 
 This is being implemented one milestone at a time. Each milestone is reviewed and runnable before the next begins.
 
@@ -107,17 +135,19 @@ The `robot` service brings up a real ROS2 (Humble) + Gazebo simulation of a Turt
 
 The robot starts driving as soon as a `cmd` MQTT message reaches it — you don't need the camera working to command it (see step 7).
 
-### 5. Watching the simulation visually (optional)
+### 5. Watching the simulation visually (automatic, if you have a display)
 
-Headless-by-default (step 4) is the right choice for what actually ships, but it's genuinely useful during development to *see* the physics simulation move as you drive it — not instead of the camera feed, alongside it. `docker-compose.gui.yml` is an opt-in override that passes your host's X11 display into the robot container so Gazebo's own GUI (`gzclient`) can attach to the already-running simulation:
+Headless-by-default (step 4) is still the right choice for what actually ships, but it's genuinely useful during development to *see* the physics simulation move as you drive it — not instead of the camera feed, alongside it. `docker-compose.yml`'s `robot` service passes your host's `DISPLAY`/X11 socket through unconditionally, and `simulation.launch.py` checks at startup: if a real `DISPLAY` is present, it launches Gazebo's own GUI (`gzclient`) alongside the headless server automatically - **no extra command needed**, just `docker compose up` (or `make up`) on a normal Linux desktop. On a host with no `DISPLAY` (a real headless server, CI), this is simply skipped and the simulation runs exactly as it always did.
+
+One-time-per-login-session prerequisite on the host (`make up`/`up-test-pattern`/`up-camera` do this automatically; plain `docker compose up` needs it done once yourself first):
 
 ```bash
-xhost +local:docker      # one-time per session: let local containers reach your X server
-make up-gui              # recreates the robot container with the X11 socket mounted
-make gzclient             # opens the Gazebo GUI window, attached to the live sim
+xhost +local:docker
 ```
 
-A window opens on your actual desktop showing the Turtlebot3 in its world — drive it from the web console (step 7) and watch it move in both places at once. Needs a real X11 (or XWayland) display on the host; doesn't work over a plain SSH session without `-X`. Combine with a camera source in one command: `CAMERA_TEST_PATTERN_FALLBACK=true make up-gui`. Close the window and `make gzclient` again any time — it's just attaching a viewer, not restarting the simulation underneath it.
+A window opens on your actual desktop showing the Turtlebot3 in its world — drive it from the web console (step 7) and watch it move in both places at once. Needs a real X11 (or XWayland) display on the host; doesn't work over a plain SSH session without `-X`. **First load is slow** (Gazebo's own splash screen, "Preparing your world...", can take a minute or more on a memory-constrained machine while textures/meshes load - this is normal, not a hang; give it time before assuming something's wrong). Closed the window by accident? `make gzclient` re-attaches a fresh viewer without restarting the simulation underneath it.
+
+If you're tight on RAM (see `docker-compose.yml`'s comment on the `robot` service's resource limits) and don't need the visual, it's safe to just close the Gazebo window - the simulation and everything else keep running exactly the same either way.
 
 ### 6. Camera & video
 

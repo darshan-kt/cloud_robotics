@@ -75,6 +75,8 @@ So: clean shutdown → the script publishes `offline` itself. Unclean death → 
 
 QoS choices: `cmd`, `health`, `status`, and both `camera/*` topics use QoS 1 (at-least-once — a dropped stop command, a missed offline notice, or a lost SDP offer/answer all matter). `telemetry`, `heartbeat`, and `lidar` use QoS 0 (fire-and-forget — they repeat frequently enough that losing one occasionally is harmless, and QoS 0 has the lowest overhead).
 
+![Every MQTT topic and the ACL boundary enforcing who can read/write each one](images/mqtt-topic-acl.png)
+
 `cmd`'s payload is deliberately a *discrete command name*, not a raw `Twist` (linear/angular velocity). Converting `"forward"` into an actual ROS2 velocity command is explicitly the Robot Cloud Agent's job (Milestone 4) — the wire format stays a stable, simple contract regardless of how that conversion logic evolves later.
 
 ### Code changes
