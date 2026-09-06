@@ -4,7 +4,9 @@
 
 ## Diagrams (PNG)
 
-Rendered from real Mermaid source via a headless Chrome (`mermaid.js` from CDN, screenshotted) — the same diagram language already used inline in `docs/00-overview.md` and `docs/11-aws-migration.md`, exported as standalone images for docs that want a picture without a live Mermaid-capable renderer. Every diagram describes the system **as it actually is** as of the security hardening pass (post-Milestone-11) — not aspirational.
+Rendered from real Mermaid source via a headless Chrome (`mermaid.js` from CDN, screenshotted) — the same diagram language already used inline in `docs/00-overview.md` and `docs/11-aws-migration.md`, exported as standalone images for docs that want a picture without a live Mermaid-capable renderer.
+
+**Built vs. proposed.** Every diagram in the table below describes the system **as it actually is** as of the security hardening pass (post-Milestone-11), with exactly two exceptions, both marked **"Proposed, not built"**: `target-architecture.png` and `safety-layers.png` illustrate [`target-architecture.md`](../target-architecture.md)'s design for multi-institution deployment, which has not been implemented. They are drawn in the same visual language deliberately — but nothing in them exists yet, and they should never be read as a description of the running system.
 
 | File | Shows | Referenced from |
 |---|---|---|
@@ -12,6 +14,8 @@ Rendered from real Mermaid source via a headless Chrome (`mermaid.js` from CDN, 
 | `command-path.png` | Sequence diagram: a teleop command's full round trip, browser to wheels and back as telemetry — including the backstop rate-limit check and the tamper-evident audit log write | [`00-overview.md`](../00-overview.md) |
 | `video-path.png` | Sequence diagram: the WebRTC offer/answer signalling flow and where media actually flows | [`00-overview.md`](../00-overview.md), [`08-webrtc-signalling.md`](../08-webrtc-signalling.md) |
 | `security-and-audit-path.png` | Sequence diagram: login → lockout check → JWT (with `jti`) → single-use WS ticket exchange → logout → revocation check on reuse | [`00-overview.md`](../00-overview.md), [`12-security-hardening.md`](../12-security-hardening.md) |
+| `target-architecture.png` | **Proposed, not built:** the multi-institution target — site gateway, four separated planes, tenant-isolated datastores, federated identity | [`target-architecture.md`](../target-architecture.md) |
+| `safety-layers.png` | **Proposed, not built:** the six safety layers (L0 hardware → L5 console), each annotated with what it depends on | [`target-architecture.md`](../target-architecture.md) |
 | `mqtt-topic-acl.png` | Every MQTT topic plus the ACL boundary enforcing who can read/write each one | [`03-mqtt-layer.md`](../03-mqtt-layer.md) |
 | `topic-name-mapping.png` | The same piece of data's three names as it crosses layers (ROS2 topic → MQTT topic → REST/WS field) | [`configuration-reference.md`](../configuration-reference.md) |
 | `repo-layout.png` | Folder structure of both containers | [`01-repository-structure.md`](../01-repository-structure.md) |

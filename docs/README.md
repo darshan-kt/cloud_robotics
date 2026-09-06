@@ -32,5 +32,7 @@ Not part of the reading order above — for looking something up, not reading st
 
 - [API & MQTT Reference](api-reference.md) — every REST endpoint, WebSocket message shape, and MQTT topic in one place, pulled directly from the current code.
 - [Configuration Reference](configuration-reference.md) — every `.env` variable and YAML config key, which container reads it, the ROS2 ⇄ MQTT ⇄ REST topic/field mapping, and what to check before/after changing something — including real-robot and AWS migration precautions.
+- [Architecture Assessment](architecture-assessment.md) — a source-verified review of scalability, security, modularity, and integrity, rated separately for single-institution use versus deployment across many schools/colleges/universities, with a prioritized roadmap ordered by cost of delay.
+- [Target Architecture](target-architecture.md) — the design that answers that assessment: seven principles, eleven decisions (each with the alternatives considered), the data model, the layered safety architecture, and a staged migration path from the current system that never requires a rewrite or a synchronized deploy.
 
 Root-level architecture, folder layout, and deployment references also live at the top of the repo — see the main [`README.md`](../README.md) for the roadmap checklist.
