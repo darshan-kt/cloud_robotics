@@ -4,13 +4,14 @@
 
 ## Diagrams (PNG)
 
-Rendered from real Mermaid source via a headless Chrome (`mermaid.js` from CDN, screenshotted) — the same diagram language already used inline in `docs/00-overview.md` and `docs/11-aws-migration.md`, exported as standalone images for docs that want a picture without a live Mermaid-capable renderer. Every diagram describes the system **as it actually is** as of the LiDAR feature (post-Milestone-11) — not aspirational.
+Rendered from real Mermaid source via a headless Chrome (`mermaid.js` from CDN, screenshotted) — the same diagram language already used inline in `docs/00-overview.md` and `docs/11-aws-migration.md`, exported as standalone images for docs that want a picture without a live Mermaid-capable renderer. Every diagram describes the system **as it actually is** as of the security hardening pass (post-Milestone-11) — not aspirational.
 
 | File | Shows | Referenced from |
 |---|---|---|
-| `architecture-overview.png` | The whole system: two containers, every service, both data paths (control over MQTT, video over WebRTC) | [`00-overview.md`](../00-overview.md) |
-| `command-path.png` | Sequence diagram: a teleop command's full round trip, browser to wheels and back as telemetry | [`00-overview.md`](../00-overview.md) |
+| `architecture-overview.png` | The whole system: two containers, every service, both data paths (control over MQTT, video over WebRTC), and the security boundaries added in the hardening pass (🔒 Redis/Postgres, rate limiting + JWT revocation on the backend) | [`00-overview.md`](../00-overview.md) |
+| `command-path.png` | Sequence diagram: a teleop command's full round trip, browser to wheels and back as telemetry — including the backstop rate-limit check and the tamper-evident audit log write | [`00-overview.md`](../00-overview.md) |
 | `video-path.png` | Sequence diagram: the WebRTC offer/answer signalling flow and where media actually flows | [`00-overview.md`](../00-overview.md), [`08-webrtc-signalling.md`](../08-webrtc-signalling.md) |
+| `security-and-audit-path.png` | Sequence diagram: login → lockout check → JWT (with `jti`) → single-use WS ticket exchange → logout → revocation check on reuse | [`00-overview.md`](../00-overview.md), [`12-security-hardening.md`](../12-security-hardening.md) |
 | `mqtt-topic-acl.png` | Every MQTT topic plus the ACL boundary enforcing who can read/write each one | [`03-mqtt-layer.md`](../03-mqtt-layer.md) |
 | `topic-name-mapping.png` | The same piece of data's three names as it crosses layers (ROS2 topic → MQTT topic → REST/WS field) | [`configuration-reference.md`](../configuration-reference.md) |
 | `repo-layout.png` | Folder structure of both containers | [`01-repository-structure.md`](../01-repository-structure.md) |

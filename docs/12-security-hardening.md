@@ -6,6 +6,8 @@ Every milestone through 11 built a working system and was honest about what wasn
 
 Nothing here changes what the platform *does*. It changes what happens when someone tries to abuse it.
 
+For the visual version of everything below: [`docs/00-overview.md`](00-overview.md) now has a third data-path diagram, **Path 3 — Auth and audit**, alongside the original control-plane and media-plane diagrams — see [`docs/images/security-and-audit-path.png`](images/security-and-audit-path.png), and the architecture-overview and command-path diagrams there were both updated (🔒 markers, the new rate-limit/audit-log steps) to show exactly what changed.
+
 ## Why it's needed
 
 The audit that started this milestone read `auth/`, the MQTT ACL/broker config, `docker-compose.yml`, every Dockerfile, `nginx.conf`, and the frontend's token handling directly, rather than assuming milestones 1-11's own comments ("worth revisiting," "a later concern") had been revisited. They hadn't. Ranked by how bad it would have been if left alone:

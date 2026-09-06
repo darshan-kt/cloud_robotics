@@ -15,10 +15,10 @@ flowchart LR
     end
 
     subgraph Cloud["cloud-container"]
-        BE["FastAPI Backend"]
-        MQ["Mosquitto (MQTT)"]
-        RD[("Redis")]
-        PG[("PostgreSQL")]
+        BE["FastAPI Backend<br/>rate limiting + JWT revocation"]
+        MQ["Mosquitto (MQTT)<br/>loopback-only host port"]
+        RD[("Redis 🔒<br/>password-protected, loopback-only")]
+        PG[("PostgreSQL 🔒<br/>+ audit_log (hash-chained), loopback-only")]
         TURN["coturn (TURN/STUN)"]
     end
 
@@ -28,7 +28,7 @@ flowchart LR
         VS["GStreamer webrtcbin"]
     end
 
-    UI -- "HTTPS + WSS (auth, commands, status)" --> BE
+    UI -- "HTTPS + WSS<br/>bearer JWT / single-use WS ticket" --> BE
     BE -- "MQTT (commands, telemetry, signalling)" --> MQ
     MQ -- "MQTT" --> RA
     BE --> RD
@@ -42,6 +42,8 @@ flowchart LR
 
 Every arrow into `cloud-robotics-net` (the `BE`/`MQ`/`RD`/`PG`/`TURN` box) or `robot-container` is exactly the boundary [`docs/01-repository-structure.md`](01-repository-structure.md) draws between the two containers - nothing crosses it except MQTT and the WebRTC media path, and the media path never passes through `BE` at all. See [`docs/api-reference.md`](api-reference.md) for the concrete contract behind every one of these arrows.
 
+The 🔒 marks on `RD` and `PG` are new since [`docs/12-security-hardening.md`](12-security-hardening.md): both were previously reachable with zero credentials from anywhere that could reach their host-published port - now password-protected (Redis) or holding a tamper-evident audit trail (Postgres), and both loopback-only. `BE`'s own box grew a second job (rate limiting + JWT revocation) it didn't have before. Nothing about the diagram's *shape* changed - the boundary is the same boundary, the arrows go to the same places - only what's enforced at each box did.
+
 ### Path 1 — Commands and telemetry (the "control plane")
 
 ```
@@ -54,15 +56,19 @@ The operator clicks an arrow button (or presses an arrow key). That intent trave
 sequenceDiagram
     participant Op as Operator (Browser)
     participant BE as FastAPI Backend
+    participant RD as Redis (session + rate limit)
+    participant PG as Postgres (audit_log)
     participant MQ as Mosquitto
     participant RA as Robot Cloud Agent
     participant ROS as ROS2 / Turtlebot3
 
-    Op->>BE: WS {"command":"forward"} (/ws/teleop) or POST /control
-    BE->>BE: require_holder() + renew() session
+    Op->>BE: WS {"command":"forward"} (ticket-authenticated /ws/teleop) or POST /control (bearer JWT)
+    BE->>RD: check_and_increment() command rate limit (skipped for `stop`)
+    BE->>RD: require_holder() + renew() session
     BE->>MQ: publish robots/{id}/cmd (QoS 1)
     MQ->>RA: deliver robots/{id}/cmd
     RA->>ROS: publish /cmd_vel (Twist)
+    BE->>PG: record_safe() tamper-evident audit log entry
     ROS-->>RA: /odom, /battery, /diagnostics
     RA->>MQ: publish telemetry / health (periodic)
     MQ->>BE: deliver telemetry / health
@@ -70,6 +76,8 @@ sequenceDiagram
 ```
 
 *Static image version (for viewers without live Mermaid rendering): [`docs/images/command-path.png`](images/command-path.png).*
+
+Two steps here didn't exist before [`docs/12-security-hardening.md`](12-security-hardening.md): the rate-limit check (a backstop above the frontend's own 20 cmd/s client-side throttle, deliberately skipped for `stop` - a safety override that could be rate-limited away would defeat its own purpose) and the audit log write (hash-chained, so a later edit or deletion is detectable - see [`scripts/verify-audit-log.py`](../scripts/verify-audit-log.py)). Everything else in this path - the session check, the MQTT publish, the telemetry return trip - is exactly what Milestone 7 built.
 
 ### Path 2 — Video (the "media plane")
 
@@ -106,6 +114,59 @@ sequenceDiagram
 Note the last diagram's punchline: `BE` only ever sees SDP *text* (twice - the offer relay in, the answer relay back out), never a single video byte. Every arrow carrying actual media (`VS->>Op`) bypasses the backend entirely, exactly as the Path 2 diagram above promises. See [`docs/08-webrtc-signalling.md`](08-webrtc-signalling.md) for why signalling needed its own MQTT topics, and [`docs/09-frontend.md`](09-frontend.md) for why the TURN hop turned out to be load-bearing, not optional, against a real browser.
 
 *Static image version: [`docs/images/video-path.png`](images/video-path.png). Full system topology as one picture: [`docs/images/architecture-overview.png`](images/architecture-overview.png).*
+
+### Path 3 — Auth and audit (the "security plane")
+
+Added by [`docs/12-security-hardening.md`](12-security-hardening.md), and cross-cutting rather than robot-specific: every request in Path 1 above authenticates and gets recorded through this same machinery, whether it's a login, a WebSocket connection, or a logout.
+
+```mermaid
+sequenceDiagram
+    participant Op as Operator (Browser)
+    participant BE as FastAPI Backend
+    participant RD as Redis
+    participant PG as Postgres (audit_log)
+
+    Op->>BE: POST /auth/login {username, password}
+    BE->>RD: seconds_locked_out(client_ip)?
+    alt too many recent failures
+        BE-->>Op: 429 Too Many Requests (Retry-After)
+    else allowed
+        BE->>BE: authenticate() via hmac.compare_digest
+        BE->>RD: record_success() / record_failure()
+        BE->>PG: record_safe() login audit entry
+        BE-->>Op: 200 {access_token (JWT + jti), expires_in}
+    end
+
+    Note over Op,BE: Every REST call: Authorization: Bearer JWT, checked against Redis's revoked_jti set
+
+    Op->>BE: POST /auth/ws-ticket (Bearer JWT)
+    BE->>RD: SET ws_ticket:{ticket} = operator (EX 15s)
+    BE-->>Op: {ticket}
+
+    Op->>BE: WS /ws/status or /ws/teleop/{id} ?ticket=...
+    BE->>RD: GETDEL ws_ticket:{ticket} (single-use)
+    RD-->>BE: operator (or nil -> reject)
+    BE-->>Op: WS accepted
+
+    Op->>BE: POST /auth/logout (Bearer JWT)
+    BE->>RD: SET revoked_jti:{jti} (EX = remaining token life)
+    BE->>PG: record_safe() logout audit entry
+    BE-->>Op: 204 No Content
+
+    Op->>BE: reuse same JWT on another request
+    BE->>RD: is_revoked(jti)?
+    RD-->>BE: true
+    BE-->>Op: 401 Token has been revoked
+```
+
+*Static image version: [`docs/images/security-and-audit-path.png`](images/security-and-audit-path.png).*
+
+Two design choices here are worth calling out because they're easy to get wrong:
+
+- **Why a ticket, not the JWT itself, in the WebSocket URL?** Browsers can't set custom headers on a WS handshake, so *something* has to travel in the URL. A 15-second, single-use ticket is worthless to anyone who reads it back out of an access log or proxy log a moment later - a design confirmed directly, not just argued for: a real WebSocket client reusing the same ticket twice gets rejected with `HTTP 403` on the second attempt.
+- **Why does revocation live in Redis instead of the JWT itself?** A JWT is stateless by design - nothing can invalidate one before its own `exp` without *some* server-side state. Keying the blacklist entry's TTL to the token's own remaining lifetime means a revocation record can never outlive the token it revokes, so this list is self-cleaning rather than growing forever.
+
+See [`docs/12-security-hardening.md`](12-security-hardening.md) for the full threat model this closes, what was verified live against the running stack, and what's still deliberately deferred (MQTT transport security, real per-operator accounts, a third-party pentest).
 
 ## Why it's needed
 
@@ -153,6 +214,6 @@ This doc itself doesn't ship code. What it establishes, that every later milesto
 2. **Two data paths, two protocols.** Commands/telemetry ride MQTT. Video rides WebRTC, signalled (not carried) by the backend.
 3. **Config over hardcoding.** Every address that differs between "my laptop" and "AWS" is a config value, never a literal, from the very first working container.
 
-The three diagrams above were added in Milestone 11's final documentation pass, once every arrow in them had actually been built and verified (Milestones 1-10) - drawing the topology before any of it existed would have been a guess; drawing it now is a description of something real. See [`docs/api-reference.md`](api-reference.md) for the exact contract behind each arrow, and [`docs/11-aws-migration.md`](11-aws-migration.md) for how this same topology maps onto real AWS infrastructure.
+The first two diagrams were added in Milestone 11's final documentation pass, once every arrow in them had actually been built and verified (Milestones 1-10) - drawing the topology before any of it existed would have been a guess; drawing it now is a description of something real. The third (Path 3, auth and audit) was added post-Milestone-11 alongside [`docs/12-security-hardening.md`](12-security-hardening.md), for the same reason: every arrow in it is something that was built and verified live against the running stack, not proposed. See [`docs/api-reference.md`](api-reference.md) for the exact contract behind each arrow, and [`docs/11-aws-migration.md`](11-aws-migration.md) for how this same topology maps onto real AWS infrastructure.
 
 The next doc, [01 — Repository Structure](01-repository-structure.md), turns this into the actual folders and files created in Milestone 1.
