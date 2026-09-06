@@ -17,8 +17,13 @@ services:
     container_name: cloud-robotics-mosquitto
     networks:
       - cloud-robotics-net
+    # Loopback-only: the robot/backend reach this broker over the internal
+    # cloud-robotics-net by service name, never through this published port
+    # - it exists purely for host-side debugging (mosquitto_sub/pub by
+    # hand). Binding 0.0.0.0 here bought nothing and widened the attack
+    # surface for free - see docs/12-security-hardening.md.
     ports:
-      - "${MQTT_PORT:-1883}:1883"
+      - "127.0.0.1:${MQTT_PORT:-1883}:1883"
     # Overrides the stock image entrypoint to generate passwordfile from
     # env vars first - see docker-entrypoint-wrapper.sh and docs/03-mqtt-layer.md.
     entrypoint: ["/bin/sh", "/docker-entrypoint-wrapper.sh"]
@@ -43,6 +48,8 @@ services:
       retries: 5
       start_period: 5s
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
 
   # --- Redis: session locks + live fleet state (Milestone 7) - see
   #     backend/app/db/redis.py and docs/07-cloud-backend.md ---
@@ -51,20 +58,25 @@ services:
     container_name: cloud-robotics-redis
     networks:
       - cloud-robotics-net
-    # Published for local dev/debugging convenience (redis-cli, the live
-    # integration tests in cloud-container/tests/) - the backend itself
-    # always reaches it over the internal network by service name, never
-    # through this host-published port. Same tradeoff as BACKEND_PORT.
+    # Previously unauthenticated with this port published to 0.0.0.0 -
+    # anyone who could reach it could read/write session locks and fleet
+    # state directly, bypassing the JWT/session layer entirely. Now
+    # password-protected AND loopback-only - see docs/12-security-hardening.md.
+    # Still reachable for local dev/debugging (redis-cli, the live
+    # integration tests in cloud-container/tests/) via `-a $REDIS_PASSWORD`.
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-redis_dev_password_change_me}"]
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_dev_password_change_me}", "--no-auth-warning", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
 
   # --- PostgreSQL: durable robot registry + session audit log (Milestone 7) -
   #     see backend/app/db/postgres.py and docs/07-cloud-backend.md ---
@@ -73,9 +85,10 @@ services:
     container_name: cloud-robotics-postgres
     networks:
       - cloud-robotics-net
-    # Same reasoning as redis's port above.
+    # Loopback-only - same reasoning as redis's port above, and same fix
+    # (was published to 0.0.0.0 for no operational reason).
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-cloud_robotics}
       POSTGRES_USER: ${POSTGRES_USER:-robotics}
@@ -88,6 +101,8 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
 
   # --- coturn: TURN relay for WebRTC (Milestone 9). STUN alone (the robot's
   #     existing stun_server) isn't enough here: Chrome hides its OWN local
@@ -123,6 +138,12 @@ services:
       - "--no-tls"
       - "--no-dtls"
     restart: unless-stopped
+    # Not cap_drop'd: network_mode: host plus a wide UDP relay port range
+    # means verifying an exact minimal capability set needs real interactive
+    # testing this pass didn't have room for - see docs/12-security-hardening.md's
+    # deferred-work section. no-new-privileges alone is still safe to add.
+    security_opt:
+      - no-new-privileges:true
 
   # --- FastAPI backend: never talks to ROS2, only MQTT/Redis/Postgres ---
   backend:
@@ -150,12 +171,15 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-robotics}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-robotics_dev_password}
       BACKEND_PORT: ${BACKEND_PORT:-8000}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password_change_me}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
       # --- auth/ + sessions/ (Milestone 7) ---
       OPERATOR_USERNAME: ${OPERATOR_USERNAME:-operator}
       OPERATOR_PASSWORD: ${OPERATOR_PASSWORD:-operator_dev_password}
       JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret-change-me}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
-      JWT_EXPIRY_SECONDS: ${JWT_EXPIRY_SECONDS:-3600}
+      JWT_EXPIRY_SECONDS: ${JWT_EXPIRY_SECONDS:-1800}
       SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-30}
     # Dev convenience: bind-mount source + add --reload. The image itself
     # (Dockerfile CMD) runs without --reload, which is what actually ships.
@@ -171,6 +195,13 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    # Our own image, no special syscalls needed (plain uvicorn) - safe to
+    # drop every Linux capability outright, unlike the third-party images
+    # above whose entrypoints/privilege needs aren't fully mapped yet.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   # --- React operator console: talks only to the backend, never to MQTT/ROS2 directly ---
   frontend:
@@ -206,6 +237,12 @@ services:
       - backend
       - coturn
     restart: unless-stopped
+    # Same reasoning as backend's cap_drop above - Vite's dev server needs
+    # no elevated Linux capabilities.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
 
   # --- Robot: ROS2 Humble base image running the real Robot Cloud Agent
   #     against real ROS2/Gazebo (Milestone 5) with GStreamer/WebRTC video
@@ -266,6 +303,12 @@ services:
       mosquitto:
         condition: service_healthy
     restart: unless-stopped
+    # Not cap_drop'd: Gazebo/GStreamer/X11 forwarding have privilege needs
+    # this pass didn't have room to map exhaustively without risking a
+    # hard-to-debug break in the heaviest container here - see
+    # docs/12-security-hardening.md's deferred-work section.
+    security_opt:
+      - no-new-privileges:true
     # Gazebo + ROS2 + GStreamer/x264 in one container is heavy, and an
     # unbounded container can exhaust a small dev host's RAM badly enough
     # to freeze the whole machine (swap thrashing), not just get OOM-killed

@@ -4,7 +4,7 @@
  * useTeleopSocket), so a few seconds of staleness during a reconnect is
  * fine. */
 import { useEffect, useState } from 'react'
-import { resolveWsBaseUrl } from '../api/client'
+import { getWsTicket, resolveWsBaseUrl } from '../api/client'
 import type { RobotSummary, StatusStreamMessage } from '../api/types'
 
 interface UseStatusSocketResult {
@@ -25,9 +25,18 @@ export function useStatusSocket(token: string | null): UseStatusSocketResult {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
     async function connect() {
-      const base = await resolveWsBaseUrl()
+      let base: string
+      let ticket: string
+      try {
+        ;[base, { ticket }] = await Promise.all([resolveWsBaseUrl(), getWsTicket(token as string)])
+      } catch {
+        // Transient failure (network blip, or the real token itself
+        // expired) - same retry cadence as a dropped socket below.
+        if (!cancelled) reconnectTimer = setTimeout(connect, RECONNECT_DELAY_MS)
+        return
+      }
       if (cancelled) return
-      ws = new WebSocket(`${base}/ws/status?token=${encodeURIComponent(token as string)}`)
+      ws = new WebSocket(`${base}/ws/status?ticket=${encodeURIComponent(ticket)}`)
 
       ws.onopen = () => setConnected(true)
       ws.onmessage = (event) => {

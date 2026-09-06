@@ -56,6 +56,16 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
+class WsTicketResponse(BaseModel):
+    """A short-lived, single-use credential for the two WebSocket endpoints
+    (/ws/status, /ws/teleop/{id}) - see auth/dependencies.py's
+    get_current_operator_ws() and docs/12-security-hardening.md for why the
+    long-lived operator JWT no longer travels in a WS URL query string."""
+
+    ticket: str
+    expires_in: int
+
+
 class WebRTCOfferRequest(BaseModel):
     """See api/webrtc.py and docs/08-webrtc-signalling.md - `sdp` is the
     browser's own RTCPeerConnection offer text, relayed to the robot over

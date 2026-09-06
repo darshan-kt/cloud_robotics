@@ -14,7 +14,7 @@
  * catches that.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { login as apiLogin } from '../api/client'
+import { login as apiLogin, logout as apiLogout } from '../api/client'
 
 const STORAGE_KEY = 'cloud-robotics.auth'
 
@@ -84,9 +84,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(() => {
+    // Revoke server-side (app/api/auth.py's /auth/logout) so the token
+    // can't be replayed if it leaked, rather than just forgetting it
+    // locally and letting it silently ride out its remaining lifetime -
+    // see docs/12-security-hardening.md. Fire-and-forget: the client-side
+    // sign-out must still happen even if this call fails (network drop,
+    // token already expired).
+    if (auth?.token) apiLogout(auth.token).catch(() => {})
     localStorage.removeItem(STORAGE_KEY)
     setAuth(null)
-  }, [])
+  }, [auth])
 
   const value = useMemo<AuthContextValue>(
     () => ({

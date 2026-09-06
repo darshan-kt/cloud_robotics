@@ -35,6 +35,25 @@ CREATE TABLE IF NOT EXISTS control_sessions (
 );
 
 CREATE INDEX IF NOT EXISTS control_sessions_robot_id_idx ON control_sessions (robot_id);
+
+-- Tamper-evident audit trail (Milestone 12) - every login attempt, session
+-- acquire/release, and command (including emergency stop) gets an
+-- append-only row here, hash-chained via prev_hash/entry_hash so any later
+-- edit or deletion breaks the chain from that point forward. See
+-- app/audit/logger.py and scripts/verify-audit-log.py.
+CREATE TABLE IF NOT EXISTS audit_log (
+    id BIGSERIAL PRIMARY KEY,
+    ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+    actor TEXT NOT NULL,
+    action TEXT NOT NULL,
+    robot_id TEXT,
+    result TEXT NOT NULL,
+    detail JSONB NOT NULL DEFAULT '{}'::jsonb,
+    prev_hash TEXT NOT NULL,
+    entry_hash TEXT NOT NULL UNIQUE
+);
+
+CREATE INDEX IF NOT EXISTS audit_log_ts_idx ON audit_log (ts);
 """
 
 

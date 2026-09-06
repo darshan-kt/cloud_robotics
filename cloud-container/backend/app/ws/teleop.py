@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, status
 
 from app.auth.dependencies import get_current_operator_ws
 from app.fleet.manager import FleetManager, RobotNotFoundError
+from app.fleet.rate_limit import CommandRateLimitError
 from app.models import Command
 from app.sessions.manager import SessionConflictError
 
@@ -61,6 +62,8 @@ async def teleop(websocket: WebSocket, robot_id: str, operator: str = Depends(ge
                 # Session TTL expired mid-conversation (an unusually long
                 # gap between commands) - tell the client so it can
                 # re-acquire rather than silently doing nothing.
+                await websocket.send_json({"error": str(exc)})
+            except CommandRateLimitError as exc:
                 await websocket.send_json({"error": str(exc)})
     except WebSocketDisconnect:
         pass

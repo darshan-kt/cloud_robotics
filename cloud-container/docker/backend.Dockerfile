@@ -15,8 +15,14 @@ WORKDIR /app
 COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY backend/app ./app
-COPY config ./config
+# Runs as an unprivileged user - plain uvicorn needs no root capability at
+# all, and the container's own cap_drop: [ALL] in docker-compose.yml only
+# actually means something if the process inside can't just become root
+# again on its own. See docs/12-security-hardening.md.
+RUN useradd --uid 1000 --create-home --shell /usr/sbin/nologin appuser
+COPY --chown=appuser:appuser backend/app ./app
+COPY --chown=appuser:appuser config ./config
+USER appuser
 
 EXPOSE 8000
 

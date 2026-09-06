@@ -16,8 +16,8 @@ from typing import Optional
 import redis.asyncio as redis
 
 
-def create_client(host: str, port: int, logger: Optional[logging.Logger] = None) -> redis.Redis:
+def create_client(host: str, port: int, password: str, logger: Optional[logging.Logger] = None) -> redis.Redis:
     logger = logger or logging.getLogger("backend.db.redis")
-    client = redis.Redis(host=host, port=port, decode_responses=True)
+    client = redis.Redis(host=host, port=port, password=password, decode_responses=True)
     logger.info(f"Redis client created ({host}:{port})")
     return client

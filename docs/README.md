@@ -24,6 +24,7 @@ Each doc follows the same three-part shape:
 | 09 | [The Frontend](09-frontend.md) | 9 — React frontend | ✅ |
 | 10 | [Testing Strategy](10-testing-strategy.md) | 10 — Integration + tests | ✅ |
 | 11 | [AWS Migration Guide](11-aws-migration.md) | 11 — Final docs pass | ✅ |
+| 12 | [Security Hardening](12-security-hardening.md) | Post-11 — security audit + hardening pass | ✅ |
 
 ## Reference material
 

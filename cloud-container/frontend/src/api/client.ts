@@ -23,6 +23,7 @@ import type {
   SessionInfo,
   TokenResponse,
   WebRTCAnswer,
+  WsTicketResponse,
 } from './types'
 
 export class ApiError extends Error {
@@ -81,6 +82,17 @@ async function request<T>(
 
 export async function login(username: string, password: string): Promise<TokenResponse> {
   return request<TokenResponse>('/auth/login', { method: 'POST', body: { username, password } })
+}
+
+export async function logout(token: string): Promise<void> {
+  await request<void>('/auth/logout', { method: 'POST', token })
+}
+
+/** Exchanges the operator's bearer token for a 15-second, single-use
+ * ticket - called immediately before opening either WebSocket, never
+ * cached. See docs/12-security-hardening.md. */
+export async function getWsTicket(token: string): Promise<WsTicketResponse> {
+  return request<WsTicketResponse>('/auth/ws-ticket', { method: 'POST', token })
 }
 
 export async function getHealth(): Promise<HealthResponse> {

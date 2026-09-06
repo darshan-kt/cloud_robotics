@@ -1,4 +1,4 @@
-fastapi==0.115.0
+fastapi==0.141.1
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
 PyYAML==6.0.2
@@ -7,4 +7,8 @@ PyYAML==6.0.2
 paho-mqtt==1.6.1
 asyncpg==0.29.0
 redis==5.0.8
-PyJWT==2.9.0
+# Bumped from 2.9.0 (Milestone 12 dependency audit - pip-audit flagged
+# known CVEs in that version, fixed here). fastapi bumped alongside it to
+# pull in a starlette release with its own CVEs fixed, since fastapi==0.115.0
+# pinned to a vulnerable starlette transitively - see docs/12-security-hardening.md.
+PyJWT==2.13.0

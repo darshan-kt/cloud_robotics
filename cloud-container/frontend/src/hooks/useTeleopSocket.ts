@@ -8,7 +8,7 @@
  * the Robot page's UI make re-acquiring an explicit action.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { resolveWsBaseUrl } from '../api/client'
+import { getWsTicket, resolveWsBaseUrl } from '../api/client'
 import type { Command, TeleopServerMessage } from '../api/types'
 
 export type TeleopConnectionState = 'idle' | 'connecting' | 'connected' | 'error' | 'closed'
@@ -36,10 +36,17 @@ export function useTeleopSocket(token: string | null, robotId: string | null, en
     setError(null)
 
     ;(async () => {
-      const base = await resolveWsBaseUrl()
+      let base: string
+      let ticket: string
+      try {
+        ;[base, { ticket }] = await Promise.all([resolveWsBaseUrl(), getWsTicket(token)])
+      } catch {
+        if (!cancelled) setState('error')
+        return
+      }
       if (cancelled) return
       ws = new WebSocket(
-        `${base}/ws/teleop/${encodeURIComponent(robotId)}?token=${encodeURIComponent(token)}`,
+        `${base}/ws/teleop/${encodeURIComponent(robotId)}?ticket=${encodeURIComponent(ticket)}`,
       )
       wsRef.current = ws
 

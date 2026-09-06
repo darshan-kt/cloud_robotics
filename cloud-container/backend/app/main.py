@@ -21,19 +21,21 @@ from app.api.auth import router as auth_router
 from app.api.health import router as health_router
 from app.api.robots import router as robots_router
 from app.api.webrtc import router as webrtc_router
-from app.config import get_settings
+from app.config import assert_production_safe, get_settings
 from app.db.postgres import create_pool as create_postgres_pool
 from app.db.redis import create_client as create_redis_client
 from app.fleet.manager import FleetManager
 from app.logging_config import configure_logging
 from app.mqtt.service import MQTTService
 from app.registry.store import RobotRegistry
+from app.security_headers import SecurityHeadersMiddleware
 from app.sessions.manager import SessionManager
 from app.webrtc.relay import WebRTCSignallingRelay
 from app.ws.status import router as status_ws_router
 from app.ws.teleop import router as teleop_ws_router
 
 settings = get_settings()
+assert_production_safe(settings)
 configure_logging(settings.log_level)
 logger = logging.getLogger("backend.main")
 
@@ -47,7 +49,7 @@ async def lifespan(app: FastAPI):
         settings.postgres_user,
         settings.postgres_password,
     )
-    redis_client = create_redis_client(settings.redis_host, settings.redis_port)
+    redis_client = create_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
 
     registry = RobotRegistry(pg_pool, redis_client)
     sessions = SessionManager(pg_pool, redis_client, settings.session_ttl_seconds)
@@ -71,7 +73,7 @@ async def lifespan(app: FastAPI):
     mqtt_service.on_message("lidar", registry.record_lidar_scan)
     mqtt_service.on_message("camera/answer", webrtc_relay.handle_answer)
 
-    fleet_manager = FleetManager(registry, sessions, mqtt_service)
+    fleet_manager = FleetManager(registry, sessions, mqtt_service, pg_pool=pg_pool, rate_limit_redis=redis_client)
 
     app.state.pg_pool = pg_pool
     app.state.redis_client = redis_client
@@ -93,17 +95,19 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(title="Cloud Robotics Backend", version="0.1.0", lifespan=lifespan)
 
-    # Wide open for local development. There's no cookie-based session to
-    # protect here - auth is a bearer token the client attaches explicitly
-    # - so an open CORS policy doesn't create a CSRF hole the way it would
-    # for cookie auth; still worth tightening to the real frontend
-    # origin(s) once Milestone 9 fixes what those are.
+    # Locked to explicit origins (CORS_ALLOWED_ORIGINS) since Milestone 12 -
+    # was allow_origins=["*"]. Auth is a bearer token the client attaches
+    # explicitly, so this was never a classic cookie-based CSRF hole, but a
+    # wildcard still let any origin that could get a request through read
+    # the response - not something worth leaving open indefinitely. See
+    # docs/12-security-hardening.md.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.cors_origins_list,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(SecurityHeadersMiddleware)
 
     app.include_router(health_router)
     app.include_router(auth_router)

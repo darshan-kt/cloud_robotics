@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.auth.dependencies import get_current_operator
 from app.fleet.manager import FleetManager, RobotNotFoundError
+from app.fleet.rate_limit import CommandRateLimitError
 from app.models import ControlRequest, RobotDetail, RobotSummary, SessionInfo
 from app.sessions.manager import SessionConflictError
 
@@ -83,6 +84,8 @@ async def send_control(
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Unknown robot '{robot_id}'")
     except SessionConflictError as exc:
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc))
+    except CommandRateLimitError as exc:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, str(exc))
     return {"status": "sent"}
 
 
@@ -96,6 +99,10 @@ async def emergency_stop(
     enforces for every other command - see fleet/manager.py's
     send_command() docstring for why `stop` is the one safety override."""
     try:
+        # `stop` is exempt from the backstop command rate limit (see
+        # fleet/manager.py's send_command()) - a safety override cannot be
+        # allowed to be rate-limited out of delivery, so no
+        # CommandRateLimitError branch is needed here.
         await fleet.send_command(robot_id, operator, "stop")
     except RobotNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Unknown robot '{robot_id}'")

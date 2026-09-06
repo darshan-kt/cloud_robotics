@@ -83,6 +83,15 @@ export interface TokenResponse {
   expires_in: number
 }
 
+// POST /auth/ws-ticket (app/api/auth.py) - a short-lived, single-use
+// credential the two WebSocket hooks exchange for immediately before
+// connecting, instead of putting the long-lived bearer token in the URL.
+// See docs/12-security-hardening.md.
+export interface WsTicketResponse {
+  ticket: string
+  expires_in: number
+}
+
 export interface HealthResponse {
   status: string
   service: string

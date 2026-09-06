@@ -142,6 +142,22 @@ test-cloud: ## Run only the backend + real-browser frontend E2E tests, on the ho
 	pip install -q -r cloud-container/tests/requirements.txt
 	pytest cloud-container/tests/ -v
 
+## --- Security (see docs/12-security-hardening.md) ---
+
+security-audit: ## Dependency vulnerability scan - both Python requirements.txt files and both frontends' package.json
+	pip install -q pip-audit
+	@echo "--- backend/requirements.txt ---"
+	pip-audit -r cloud-container/backend/requirements.txt
+	@echo "--- robot-container/requirements.txt ---"
+	pip-audit -r robot-container/requirements.txt
+	@echo "--- cloud-container/frontend ---"
+	cd cloud-container/frontend && npm audit --omit=dev
+	@echo "--- robostore-poc ---"
+	cd robostore-poc && npm audit --omit=dev
+
+verify-audit-log: ## Walk the tamper-evident audit_log hash chain and report the first broken link, if any
+	python3 scripts/verify-audit-log.py
+
 ## --- ROBOSTORE (robostore-poc/, demo app-store console, POC) ---
 ## Entirely separate from the stack above - its own compose file
 ## (docker-compose.robostore.yml), own Compose project, own containers.

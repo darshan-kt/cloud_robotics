@@ -28,6 +28,7 @@ POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "robotics_dev_password")
 
 REDIS_HOST = os.environ.get("REDIS_TEST_HOST", "localhost")
 REDIS_PORT = int(os.environ.get("REDIS_TEST_PORT", "6379"))
+REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD", "redis_dev_password_change_me")
 
 
 def _reachable(host: str, port: int) -> bool:
@@ -58,7 +59,7 @@ async def pg_pool():
 
 @pytest.fixture
 async def redis_client():
-    client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, decode_responses=True)
     yield client
     await client.aclose()
 

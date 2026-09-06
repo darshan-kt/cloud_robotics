@@ -21,6 +21,18 @@ DEFAULT_CONFIG_FILE = CONFIG_DIR / "default.yaml"
 class Settings(BaseModel):
     log_level: str = "INFO"
 
+    # "development" preserves the zero-config `docker compose up` experience
+    # every other default here is built around. Set to "production" to turn
+    # on assert_production_safe()'s hard startup guard below - see
+    # docs/12-security-hardening.md.
+    environment: str = "development"
+
+    # Comma-separated list of browser origins allowed to call this API.
+    # Was previously CORSMiddleware(allow_origins=["*"]) - fine for local
+    # dev, not something you want load-bearing indefinitely since a bearer
+    # token is readable by whatever origin can get a request through.
+    cors_allowed_origins: str = "http://localhost:3000"
+
     mqtt_host: str = "mosquitto"
     mqtt_port: int = 1883
     # The backend's own MQTT identity (see cloud-container/mosquitto/aclfile)
@@ -32,6 +44,11 @@ class Settings(BaseModel):
 
     redis_host: str = "redis"
     redis_port: int = 6379
+    # Required since Milestone 12 - Redis previously had no password and
+    # was reachable straight from the host, a full bypass of the JWT/
+    # session layer for anyone who could reach the port. See
+    # docs/12-security-hardening.md.
+    redis_password: str = "redis_dev_password_change_me"
 
     postgres_host: str = "postgres"
     postgres_port: int = 5432
@@ -53,7 +70,10 @@ class Settings(BaseModel):
     # nobody mistakes it for something safe to ship - see docs/07-cloud-backend.md.
     jwt_secret: str = "dev-only-insecure-secret-change-me"
     jwt_algorithm: str = "HS256"
-    jwt_expiry_seconds: int = 3600
+    # Lowered from 3600: a stolen token now lives for at most 30 minutes,
+    # and can be revoked immediately via POST /auth/logout regardless - see
+    # docs/12-security-hardening.md.
+    jwt_expiry_seconds: int = 1800
 
     # --- sessions/ (Milestone 7): exclusive robot-control locks ---
     # How long an operator's exclusive control session survives with no
@@ -64,6 +84,44 @@ class Settings(BaseModel):
     # drop) is bounded by this TTL instead of hanging forever. See
     # docs/07-cloud-backend.md.
     session_ttl_seconds: int = 30
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
+
+
+# Every (field, dev-default-value) pair that must NOT still be the shipped
+# default once environment == "production" - see assert_production_safe().
+_INSECURE_DEFAULTS = {
+    "jwt_secret": "dev-only-insecure-secret-change-me",
+    "operator_password": "operator_dev_password",
+    "mqtt_backend_password": "backend_dev_password",
+    "postgres_password": "robotics_dev_password",
+    "redis_password": "redis_dev_password_change_me",
+}
+
+
+def assert_production_safe(settings: "Settings") -> None:
+    """Refuses to boot rather than silently ship a known dev credential.
+
+    Every project milestone before this one shipped an "intentionally
+    obvious" default (see jwt_secret's own comment) with a comment telling a
+    human to change it - a comment is not a control. This makes it one:
+    flipping ENVIRONMENT=production is the one thing a real deployment must
+    already do differently from local dev, so it's the one lever this check
+    can safely hang off without breaking `docker compose up`'s zero-config
+    promise for everyone still doing local dev. See docs/12-security-hardening.md.
+    """
+    if settings.environment != "production":
+        return
+    offending = [field for field, default in _INSECURE_DEFAULTS.items() if getattr(settings, field) == default]
+    if offending:
+        raise RuntimeError(
+            "Refusing to start with ENVIRONMENT=production while these settings "
+            f"still hold their insecure development defaults: {', '.join(offending)}. "
+            "Generate real secrets (see scripts/generate-secrets.sh) and set them via "
+            "environment variables before deploying."
+        )
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
