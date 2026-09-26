@@ -27,10 +27,14 @@ Rendered from real Mermaid source via a headless Chrome (`mermaid.js` from CDN, 
 
 Real captures of the actual running stack - not mockups. `terminal-startup.gif` replays real, previously-captured `docker compose` output and `curl` responses (not live-typed at record time, since a real `docker compose up` takes minutes; the content itself is genuine, captured from this project's own terminal). `web-console-walkthrough.gif` is a real Playwright session driving the real frontend against the real running backend/robot - login, live dashboard, connected WebRTC video, a populated LiDAR panel, and an actual teleop command reaching the robot (visible as the arrow button lighting up).
 
+`cloud-robotics-walkthrough.gif` and `robostore-walkthrough.gif` are newer, and were made differently: rather than recording video, a Playwright script screenshots each step of a real session and Pillow assembles the frames into a GIF with per-frame hold times. That gives deliberate pacing (~1.7 s a step) and much smaller files — 343 KB and 927 KB against several MB for a video conversion — at the cost of not capturing hover or transition motion. The sessions themselves are real: the fleet recording signs in, takes control of `turtlebot3_02` and actually drives it, which is why its telemetry panel reads `0.20 m/s`.
+
 | File | Shows | Referenced from |
 |---|---|---|
 | `terminal-startup.gif` | `docker compose up` → real service logs → `docker compose ps` → real `/metrics` output | root [`README.md`](../../README.md) |
 | `web-console-walkthrough.gif` | Login → Dashboard → Robot page (live camera + LiDAR) → Take control → drive → Health page | root [`README.md`](../../README.md), [`09-frontend.md`](../09-frontend.md) |
+| `cloud-robotics-walkthrough.gif` | Login → fleet dashboard with **three** robots → `turtlebot3_02` detail → take control → drive (telemetry reads `0.20 m/s`) → `turtlebot3_03` → Health | root [`README.md`](../../README.md), [`EXECUTION.md`](../../EXECUTION.md) |
+| `robostore-walkthrough.gif` | Login → Robot control → Robot sensors → RPLIDAR reference → Robotics projects → AI & robotics → a distribution page → Light / Blue / Dark themes | root [`README.md`](../../README.md), [`EXECUTION.md`](../../EXECUTION.md) |
 
 ## Regenerating these
 

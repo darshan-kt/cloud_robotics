@@ -6,7 +6,7 @@ It is built to run entirely on one machine today and move to AWS later **without
 
 ## See it running
 
-Real captures of the actual stack - a terminal bringing it up, and the actual browser console driving a real robot. Not mockups; see [`docs/images/README.md`](docs/images/README.md) for exactly how these were made.
+Real captures of the actual stack - a terminal bringing it up, the browser console driving a real robot, a three-robot fleet, and the ROBOSTORE demo console. Not mockups; see [`docs/images/README.md`](docs/images/README.md) for exactly how these were made, and [`EXECUTION.md`](EXECUTION.md) for step-by-step run instructions for both applications.
 
 <table>
 <tr>
@@ -25,7 +25,25 @@ Real captures of the actual stack - a terminal bringing it up, and the actual br
 
 </td>
 </tr>
+<tr>
+<td width="50%">
+
+**A fleet, not one robot** — `make up-fleet`
+
+![Cloud Robotics: fleet of three robots, robot detail, take control and drive](docs/images/cloud-robotics-walkthrough.gif)
+
+</td>
+<td width="50%">
+
+**ROBOSTORE** — the demo app-store console
+
+![ROBOSTORE: four sections, sensor and AI reference pages, and the four colour themes](docs/images/robostore-walkthrough.gif)
+
+</td>
+</tr>
 </table>
+
+Both applications, with credentials and every run command: [`EXECUTION.md`](EXECUTION.md).
 
 ## New here? Start with the docs
 
