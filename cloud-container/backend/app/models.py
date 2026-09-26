@@ -8,7 +8,7 @@ do.
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 # The five commands the robot's dispatcher understands - see
 # robot-container/robot_agent/dispatcher.py and docs/03-mqtt-layer.md's
@@ -69,9 +69,35 @@ class WsTicketResponse(BaseModel):
 class WebRTCOfferRequest(BaseModel):
     """See api/webrtc.py and docs/08-webrtc-signalling.md - `sdp` is the
     browser's own RTCPeerConnection offer text, relayed to the robot over
-    MQTT, never touched or interpreted by the backend itself."""
+    MQTT, never touched or interpreted by the backend itself.
 
-    sdp: str
+    Bounded and shape-checked since docs/security-findings.md F4. This text
+    is relayed over MQTT and then handed to GStreamer's SDP parser and
+    webrtcbin - C libraries, running on the least-hardened machine in the
+    system. The backend deliberately does not *interpret* the SDP (that
+    would break the "signalling only, never touch the media" rule), but
+    refusing something that cannot possibly be a valid offer is free, and
+    it stops the obvious cases from ever reaching that parser.
+    """
+
+    # A real browser offer is 2-6 KB; 64 KB is generous headroom while
+    # staying well under the broker's own 256 KB message_size_limit.
+    sdp: str = Field(max_length=65_536)
+
+    # Opt-in takeover of a feed another operator currently holds. Default
+    # False so taking someone's video away is always a deliberate act -
+    # see webrtc/rate_limit.py's viewer lock and docs/security-findings.md F3.
+    takeover: bool = False
+
+    @field_validator("sdp")
+    @classmethod
+    def must_look_like_an_sdp_offer(cls, value: str) -> str:
+        # RFC 4566: the version field is mandatory and must come first.
+        if not value.startswith("v=0"):
+            raise ValueError("not an SDP offer (must begin with 'v=0')")
+        if "m=video" not in value:
+            raise ValueError("SDP offer contains no video media section")
+        return value
 
 
 class WebRTCAnswerResponse(BaseModel):

@@ -30,6 +30,11 @@ class PahoMQTTClient(MQTTClientInterface):
         client_id: str,
         keepalive: int = 30,
         logger: Optional[logging.Logger] = None,
+        tls_enabled: bool = False,
+        tls_ca_certs: str = "",
+        tls_certfile: str = "",
+        tls_keyfile: str = "",
+        tls_insecure: bool = False,
     ):
         self._host = host
         self._port = port
@@ -37,6 +42,26 @@ class PahoMQTTClient(MQTTClientInterface):
         self._logger = logger or logging.getLogger("robot_agent.mqtt_client")
 
         self._client = mqtt.Client(client_id=client_id)
+        # TLS must be configured BEFORE connect() - paho applies it when the
+        # socket is created, so calling tls_set() afterwards silently does
+        # nothing. See docs/security-findings.md F6.
+        if tls_enabled:
+            self._client.tls_set(
+                ca_certs=tls_ca_certs or None,
+                certfile=tls_certfile or None,
+                keyfile=tls_keyfile or None,
+            )
+            if tls_insecure:
+                # Skips hostname verification against the broker's cert -
+                # useful only while bringing up a self-signed dev broker,
+                # and it removes the guarantee that you're talking to the
+                # broker you think you are.
+                self._client.tls_insecure_set(True)
+                self._logger.warning(
+                    "MQTT TLS hostname verification is DISABLED (MQTT_TLS_INSECURE) - "
+                    "never use this outside local bring-up"
+                )
+            self._logger.info(f"MQTT TLS enabled (ca={tls_ca_certs or 'system trust store'})")
         self._client.username_pw_set(username, password)
         self._client.reconnect_delay_set(min_delay=1, max_delay=30)
         self._client.on_connect = self._handle_connect

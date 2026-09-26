@@ -69,6 +69,70 @@ export interface LaserScan {
   ranges: (number | null)[]
 }
 
+/**
+ * Runtime guards for the three pass-through payloads.
+ *
+ * `telemetry`, `health` and `lidar` are forwarded from MQTT unmodified
+ * (see the notes on each interface above), so the interfaces here describe
+ * what a current robot_agent publishes, not what the backend guarantees.
+ * A robot running an older agent, a partial payload, or a non-telemetry
+ * frame that landed on the topic all deserialise with these fields simply
+ * absent - and a live fleet does produce exactly that: the deployed
+ * turtlebot reports `telemetry: {"cert-auth": true}` and a `lidar` object
+ * carrying nothing but `ranges`.
+ *
+ * TypeScript cannot catch that, because the values are cast at the fetch
+ * boundary. So the console validates the shape before reading it and
+ * falls back to its own "no reading" state, rather than dereferencing
+ * `undefined` and taking the whole page down with it.
+ */
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function isNullableNumber(value: unknown): value is number | null {
+  return value === null || isFiniteNumber(value)
+}
+
+export function isTelemetry(value: unknown): value is RobotTelemetry {
+  if (!value || typeof value !== 'object') return false
+  const t = value as Partial<RobotTelemetry>
+  return (
+    !!t.velocity &&
+    isFiniteNumber(t.velocity.linear) &&
+    isFiniteNumber(t.velocity.angular) &&
+    !!t.position &&
+    isFiniteNumber(t.position.x) &&
+    isFiniteNumber(t.position.y) &&
+    isFiniteNumber(t.position.heading) &&
+    isNullableNumber(t.battery_percentage)
+  )
+}
+
+export function isHealth(value: unknown): value is RobotHealth {
+  if (!value || typeof value !== 'object') return false
+  const h = value as Partial<RobotHealth>
+  return (
+    isNullableNumber(h.cpu_percent) &&
+    isNullableNumber(h.memory_percent) &&
+    isNullableNumber(h.temperature_c) &&
+    typeof h.mqtt_connected === 'boolean'
+  )
+}
+
+export function isLaserScan(value: unknown): value is LaserScan {
+  if (!value || typeof value !== 'object') return false
+  const s = value as Partial<LaserScan>
+  return (
+    Array.isArray(s.ranges) &&
+    isFiniteNumber(s.angle_min) &&
+    isFiniteNumber(s.angle_increment) &&
+    isFiniteNumber(s.range_min) &&
+    isFiniteNumber(s.range_max) &&
+    s.range_max > 0
+  )
+}
+
 export interface SessionInfo {
   session_id: string
   robot_id: string

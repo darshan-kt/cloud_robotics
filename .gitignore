@@ -30,6 +30,13 @@ docker-compose.override.yml
 .env
 .env.*
 !.env.example
+# TLS material from scripts/generate-dev-certs.sh - private keys must never
+# be committed, and even the dev CA shouldn't be shared between machines
+# (each developer generates their own). See docs/security-findings.md F6.
+certs/
+*.key
+*.crt
+*.pem
 
 # --- Databases / local data ---
 *.sqlite3

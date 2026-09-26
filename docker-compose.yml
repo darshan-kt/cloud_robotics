@@ -22,8 +22,17 @@ services:
     # - it exists purely for host-side debugging (mosquitto_sub/pub by
     # hand). Binding 0.0.0.0 here bought nothing and widened the attack
     # surface for free - see docs/12-security-hardening.md.
+    # Host-published ports are deliberately NOT tied to MQTT_PORT. That
+    # variable is "the port CLIENTS connect to" (1883 plaintext, 8883 TLS),
+    # and reusing it here meant switching clients to TLS silently remapped
+    # the host's plaintext port onto 8883 and collided with the TLS
+    # publish. Two distinct concerns, two distinct variables.
     ports:
-      - "127.0.0.1:${MQTT_PORT:-1883}:1883"
+      - "127.0.0.1:${MQTT_HOST_PORT:-1883}:1883"
+      # TLS listener, only actually bound inside the container when certs
+      # are present (see docker-entrypoint-wrapper.sh). Publishing the port
+      # unconditionally is harmless when nothing listens on it.
+      - "127.0.0.1:${MQTT_TLS_HOST_PORT:-8883}:8883"
     # Overrides the stock image entrypoint to generate passwordfile from
     # env vars first - see docker-entrypoint-wrapper.sh and docs/03-mqtt-layer.md.
     entrypoint: ["/bin/sh", "/docker-entrypoint-wrapper.sh"]
@@ -32,10 +41,22 @@ services:
       MQTT_BACKEND_PASSWORD: ${MQTT_BACKEND_PASSWORD:-backend_dev_password}
       ROBOT_ID: ${ROBOT_ID:-turtlebot3_01}
       MQTT_ROBOT_PASSWORD: ${MQTT_ROBOT_PASSWORD:-robot_dev_password}
+      # Per-robot credentials for a real fleet - see the wrapper script and
+      # docs/security-findings.md F7. Unset = single-robot dev mode.
+      MQTT_ROBOT_CREDENTIALS: ${MQTT_ROBOT_CREDENTIALS:-}
+      # Require per-device client certificates on the TLS listener, with
+      # the cert CN as the MQTT username - see the wrapper script and
+      # docs/security-findings.md F6/F7.
+      MQTT_MUTUAL_TLS: ${MQTT_MUTUAL_TLS:-false}
     volumes:
       - ./cloud-container/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - ./cloud-container/mosquitto/aclfile:/mosquitto/config/aclfile:ro
       - ./cloud-container/mosquitto/docker-entrypoint-wrapper.sh:/docker-entrypoint-wrapper.sh:ro
+      # Optional TLS material (scripts/generate-dev-certs.sh). Bind-mounting
+      # a missing host dir yields an empty one rather than failing, so this
+      # is safe when no certs have been generated - the wrapper checks for
+      # the files themselves before enabling the TLS listener.
+      - ./certs:/mosquitto/certs:ro
       - mosquitto-data:/mosquitto/data
       - mosquitto-log:/mosquitto/log
     healthcheck:
@@ -163,6 +184,13 @@ services:
       # readwrite on robots/+/cmd, read-only on everything else.
       MQTT_BACKEND_USERNAME: ${MQTT_BACKEND_USERNAME:-backend}
       MQTT_BACKEND_PASSWORD: ${MQTT_BACKEND_PASSWORD:-backend_dev_password}
+      # MQTT over TLS - off unless certs were generated and this is set.
+      # See scripts/generate-dev-certs.sh and docs/security-findings.md F6.
+      MQTT_TLS_ENABLED: ${MQTT_TLS_ENABLED:-false}
+      MQTT_TLS_CA_CERTS: ${MQTT_TLS_CA_CERTS:-}
+      MQTT_TLS_CERTFILE: ${MQTT_TLS_CERTFILE:-}
+      MQTT_TLS_KEYFILE: ${MQTT_TLS_KEYFILE:-}
+      MQTT_TLS_INSECURE: ${MQTT_TLS_INSECURE:-false}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
@@ -186,6 +214,11 @@ services:
     volumes:
       - ./cloud-container/backend/app:/app/app
       - ./cloud-container/config:/app/config:ro
+      # CA (and later, per-device client certs) for MQTT over TLS. Mounted
+      # at the same path the broker uses so MQTT_TLS_CA_CERTS is one value
+      # for every service. Empty when no certs have been generated, which
+      # is fine - MQTT_TLS_ENABLED defaults to false.
+      - ./certs:/mosquitto/certs:ro
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     depends_on:
       mosquitto:
@@ -254,14 +287,27 @@ services:
     container_name: cloud-robotics-robot
     networks:
       - cloud-robotics-net
+    # Loopback-only. This endpoint is unauthenticated by default and its
+    # /metrics payload includes robot_id - which IS the robot's MQTT
+    # username (see cloud-container/mosquitto/docker-entrypoint-wrapper.sh
+    # and the aclfile's %u pattern), so publishing it to 0.0.0.0 gave away
+    # half a credential pair to anyone who could reach the port. The same
+    # loopback treatment the mosquitto/redis/postgres ports already got -
+    # this service was missed in that pass. See docs/security-findings.md F1.
+    # `make health` and Docker's own HEALTHCHECK both still work.
+    # On REAL robot hardware the agent sits on the campus LAN where this
+    # port mapping doesn't apply at all - set ROBOT_HEALTH_TOKEN there.
     ports:
-      - "${ROBOT_HEALTH_PORT:-8080}:8080"
+      - "127.0.0.1:${ROBOT_HEALTH_PORT:-8080}:8080"
     # coturn runs with network_mode: host (see above), so it isn't
     # reachable by its container name on cloud-robotics-net - this maps
     # host.docker.internal to the real host's IP so TURN_SERVER_URL below
     # can reach it. Requires Docker 20.10+ (host-gateway support).
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      # CA for MQTT over TLS (and later the per-device client cert).
+      - ./certs:/mosquitto/certs:ro
     environment:
       ROBOT_ID: ${ROBOT_ID:-turtlebot3_01}
       MQTT_HOST: ${MQTT_HOST:-mosquitto}
@@ -269,6 +315,17 @@ services:
       # The robot authenticates as username=ROBOT_ID - see aclfile's %u pattern.
       MQTT_ROBOT_PASSWORD: ${MQTT_ROBOT_PASSWORD:-robot_dev_password}
       ROBOT_HEALTH_PORT: ${ROBOT_HEALTH_PORT:-8080}
+      # Guards /metrics and /status (which carry robot_id = the MQTT
+      # username). Empty by default so local dev stays zero-config; REQUIRED
+      # on real hardware. See docs/security-findings.md F1.
+      ROBOT_HEALTH_TOKEN: ${ROBOT_HEALTH_TOKEN:-}
+      # MQTT over TLS - see scripts/generate-dev-certs.sh and
+      # docs/security-findings.md F6.
+      MQTT_TLS_ENABLED: ${MQTT_TLS_ENABLED:-false}
+      MQTT_TLS_CA_CERTS: ${MQTT_TLS_CA_CERTS:-}
+      MQTT_TLS_CERTFILE: ${MQTT_TLS_CERTFILE:-}
+      MQTT_TLS_KEYFILE: ${MQTT_TLS_KEYFILE:-}
+      MQTT_TLS_INSECURE: ${MQTT_TLS_INSECURE:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # Real webcam -> /camera/image_raw (webcam_driver.py, Milestone 6
       # respun) - see docs/06-video-streaming.md. The device itself is NOT
@@ -282,21 +339,12 @@ services:
       # See coturn service above and docs/09-frontend.md for why this
       # exists alongside plain STUN.
       TURN_SERVER_URL: turn://${TURN_USERNAME:-turnuser}:${TURN_PASSWORD:-turn_dev_password}@host.docker.internal:${TURN_PORT:-3478}
-      # Gazebo's GUI (gzclient) - purely a local dev convenience, entirely
-      # conditional on this actually being set (see simulation.launch.py,
-      # which checks it at launch time and runs headless exactly as before
-      # if it's empty). `${DISPLAY:-}` reads the HOST's own DISPLAY (the
-      # value `docker compose` itself was run with) - on a real headless
-      # server/CI this is simply empty and nothing changes. See README.md's
-      # "Watching the simulation visually".
-      DISPLAY: ${DISPLAY:-}
-      QT_X11_NO_MITSHM: "1"
-    volumes:
-      # Bind-mounting a host path that doesn't exist just yields an empty
-      # directory in the container (unlike `devices:`, which hard-fails) -
-      # safe even on hosts with no X11 socket at all; combined with the
-      # DISPLAY gate above, gzclient is never even attempted there.
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # NOTE: DISPLAY / QT_X11_NO_MITSHM and the /tmp/.X11-unix mount used
+      # to live here, which meant every `make up` on every machine handed
+      # this container access to the host's X server - and X11 gives any
+      # client on a display the ability to keylog, screenshot, and inject
+      # input across the WHOLE desktop session. That's now opt-in via
+      # docker-compose.gui.yml (`make up-gui`). See docs/security-findings.md F5.
     depends_on:
       coturn:
         condition: service_started

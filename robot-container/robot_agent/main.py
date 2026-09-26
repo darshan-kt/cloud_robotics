@@ -20,7 +20,7 @@ import logging
 import signal
 
 from robot_agent.agent import RobotCloudAgent
-from robot_agent.config import load_config
+from robot_agent.config import assert_production_safe, load_config
 from robot_agent.health_server import HealthServer
 from robot_agent.logging_config import configure_logging
 from robot_agent.mqtt_client import PahoMQTTClient
@@ -30,6 +30,7 @@ from robot_cloud_bridge.real_ros_adapter import RealROSAdapter
 
 async def run() -> None:
     config = load_config()
+    assert_production_safe(config)
     configure_logging(config.log_level, config.robot_id)
     logger = logging.getLogger("robot_agent.main")
 
@@ -40,6 +41,11 @@ async def run() -> None:
         password=config.mqtt.password,
         client_id=f"{config.robot_id}-agent",
         keepalive=config.mqtt.keepalive,
+        tls_enabled=config.mqtt.tls_enabled,
+        tls_ca_certs=config.mqtt.tls_ca_certs,
+        tls_certfile=config.mqtt.tls_certfile,
+        tls_keyfile=config.mqtt.tls_keyfile,
+        tls_insecure=config.mqtt.tls_insecure,
     )
 
     ros_adapter = RealROSAdapter(robot_id=config.robot_id)
@@ -66,6 +72,7 @@ async def run() -> None:
         port=config.health_server.port,
         status_provider=agent.get_status,
         metrics_provider=agent.get_metrics,
+        auth_token=config.health_server.auth_token,
     )
     health_server.start()
 

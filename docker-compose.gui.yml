@@ -1,0 +1,39 @@
+# Optional compose override that lets the robot container open Gazebo's own
+# GUI window (gzclient) on your desktop. NOT applied by default - see
+# docs/security-findings.md F5 for why this moved out of docker-compose.yml.
+#
+# The short version: X11 has no meaningful isolation between clients sharing
+# a display. Any process with access to /tmp/.X11-unix can log keystrokes
+# from other windows, capture the screen, and inject synthetic input across
+# your ENTIRE desktop session - not just this container. That is an
+# acceptable trade for a developer who wants to watch the simulation, and
+# not something that should apply on every `make up`, on every machine,
+# including one that also has a browser logged into something that matters.
+#
+# To watch the simulation:
+#
+#   make up-gui
+#   # or, by hand:
+#   xhost +SI:localuser:$(id -un)
+#   docker compose -f docker-compose.yml -f docker-compose.gui.yml up -d
+#
+# Prefer `xhost +SI:localuser:$(id -un)` over the blanket
+# `xhost +local:docker`: it grants access to your own user only, rather
+# than to every local connection including other containers.
+#
+# Combine with the camera overlay if you want both:
+#   docker compose -f docker-compose.yml -f docker-compose.camera.yml \
+#                  -f docker-compose.gui.yml up -d
+services:
+  robot:
+    environment:
+      # simulation.launch.py checks this at startup and launches gzclient
+      # alongside the headless server only when it is non-empty - see
+      # README.md's "Watching the simulation visually".
+      DISPLAY: ${DISPLAY:-}
+      QT_X11_NO_MITSHM: "1"
+    volumes:
+      # Read-only: gzclient needs to talk to the X server, not modify the
+      # socket. Does not remove the fundamental X11 trust issue above, but
+      # there is no reason to grant more than is needed.
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro

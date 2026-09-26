@@ -11,6 +11,7 @@ reported in).
 """
 import os
 import socket
+import subprocess
 
 import httpx
 import pytest
@@ -18,6 +19,7 @@ import pytest
 BASE_URL = os.environ.get("BACKEND_TEST_URL", "http://localhost:8000")
 OPERATOR_USERNAME = os.environ.get("OPERATOR_USERNAME", "operator")
 OPERATOR_PASSWORD = os.environ.get("OPERATOR_PASSWORD", "operator_dev_password")
+REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD", "redis_dev_password_change_me")
 
 
 def _reachable(url: str) -> bool:
@@ -34,6 +36,35 @@ def _reachable(url: str) -> bool:
 def _require_backend_reachable():
     if not _reachable(BASE_URL):
         pytest.skip(f"Backend not reachable at {BASE_URL} - run `docker compose up -d` first.")
+
+
+@pytest.fixture(autouse=True)
+def _clear_login_rate_limit():
+    """Clears the login lockout before EVERY test in this module.
+
+    Milestone 12's brute-force protection (app/auth/rate_limit.py) counts
+    failed logins per client IP and locks that IP out for 5 minutes after 5
+    failures. This suite deliberately submits a wrong password
+    (test_login_rejects_wrong_credentials), and every test here logs in
+    from the same IP - so without this reset, running the suite a couple of
+    times in five minutes locks the test client out and every subsequent
+    test fails with 429 instead of its real assertion.
+
+    That is a genuine trap: a security control that makes the test suite
+    flaky is a security control somebody eventually disables. Resetting the
+    counter here keeps both the protection and the test that proves wrong
+    credentials are rejected.
+
+    Best-effort - if redis-cli isn't reachable the tests still run, they
+    just regain their old sensitivity to lockout.
+    """
+    subprocess.run(
+        ["docker", "exec", "cloud-robotics-redis", "sh", "-c",
+         f'redis-cli -a "{REDIS_PASSWORD}" --no-auth-warning --scan --pattern "login_*" '
+         f'| xargs -r redis-cli -a "{REDIS_PASSWORD}" --no-auth-warning DEL'],
+        capture_output=True, text=True, timeout=10, check=False,
+    )
+    yield
 
 
 def test_health_is_unauthenticated_and_ok():

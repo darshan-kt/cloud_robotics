@@ -13,6 +13,21 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
+# Load .env so the live tests authenticate with the SAME credentials the
+# running stack was started with. Without this they fall back to the
+# built-in defaults ("operator"/"operator_dev_password"), which fail
+# against any deployment that changed them - and since Milestone 12 those
+# repeated failures also trip the login brute-force lockout, turning a
+# credential mismatch into a confusing wall of HTTP 429s.
+# `set -a` exports every variable the file defines; the subshell-safe
+# grep filter skips comments and blank lines.
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env
+  set +a
+fi
+
 BRING_UP=false
 TEAR_DOWN=false
 for arg in "$@"; do
@@ -41,7 +56,10 @@ echo "=== Robot-side tests (robot_agent, real Turtlebot3/GStreamer container) ==
 # already exists (docker compose up -d must have created it).
 if docker cp robot-container/tests cloud-robotics-robot:/robot/tests 2>/dev/null \
   && docker cp robot-container/pytest.ini cloud-robotics-robot:/robot/pytest.ini 2>/dev/null; then
-  docker compose exec -T robot bash -c \
+  # -u root: the agent runs unprivileged (docs/security-findings.md F5), but
+  # `docker cp` lands these files root-owned and pytest writes .pytest_cache
+  # beside them. The test path running as root exercises the same code.
+  docker compose exec -T -u root robot bash -c \
     "pip install -q -r /robot/tests/requirements.txt && cd /robot && python3 -m pytest tests/ -v" \
     || FAILED=1
 else

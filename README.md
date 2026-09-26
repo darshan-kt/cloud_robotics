@@ -29,7 +29,19 @@ Real captures of the actual stack - a terminal bringing it up, and the actual br
 
 ## New here? Start with the docs
 
-This repository is being built **milestone by milestone**, and every milestone gets a companion doc in [`docs/`](docs/) written to teach the concept, not just describe the code. Read them in order — they're numbered for that reason. Start at [`docs/README.md`](docs/README.md). Looking something up rather than reading start to finish? See [`docs/api-reference.md`](docs/api-reference.md) for every REST/WebSocket/MQTT contract, or [`docs/configuration-reference.md`](docs/configuration-reference.md) for every `.env`/config parameter, the ROS2 ⇄ MQTT ⇄ REST topic mapping, and real-robot/AWS migration precautions.
+This repository is being built **milestone by milestone**, and every milestone gets a companion doc in [`docs/`](docs/) written to teach the concept, not just describe the code. Read them in order — they're numbered for that reason. Start at [`docs/README.md`](docs/README.md).
+
+Looking something up rather than reading start to finish:
+
+| Doc | For |
+|---|---|
+| [`api-reference.md`](docs/api-reference.md) | Every REST endpoint, WebSocket message, and MQTT topic |
+| [`configuration-reference.md`](docs/configuration-reference.md) | Every `.env`/config parameter and the ROS2 ⇄ MQTT ⇄ REST mapping |
+| [`12-security-hardening.md`](docs/12-security-hardening.md) | The first security pass: what was wrong and what was fixed |
+| [`security-findings.md`](docs/security-findings.md) | The second, deeper audit — 11 findings, each with evidence, fix, and verification |
+| [`architecture-assessment.md`](docs/architecture-assessment.md) | Honest scoring for scale, security, modularity, integrity — rated separately for one institution vs. many |
+| [`target-architecture.md`](docs/target-architecture.md) | The design for multi-institution deployment: 7 principles, 11 decisions, staged migration |
+| [`execution-strategy.md`](docs/execution-strategy.md) | How to actually build toward that: parallel tracks, quality gates, failure modes |
 
 ## Architecture at a glance
 
@@ -82,8 +94,16 @@ This is being implemented one milestone at a time. Each milestone is reviewed an
 - [x] 7. Cloud Backend (FastAPI modules, Redis + PostgreSQL — verified against a real robot, see below)
 - [x] 8. WebRTC signalling (real, MQTT-mediated — replaced the throwaway dev HTTP server, verified with a real browser, see below)
 - [x] 9. Frontend (React + TypeScript + Tailwind, keyboard teleop — verified against a real, unmodified Chrome browser, see below)
-- [x] 10. Full end-to-end integration + test suite (80/80 tests, one command — see below)
+- [x] 10. Full end-to-end integration + test suite (one command — see below)
 - [x] 11. Final documentation pass (diagrams, API/MQTT reference, deployment & AWS migration guides — see below)
+
+Post-milestone work, same standard — built, verified live, documented:
+
+- [x] **LiDAR** — the Turtlebot3's `/scan` end to end, agent → MQTT → backend → a canvas panel beside the camera feed
+- [x] **Security hardening** — Redis auth, JWT revocation, single-use WebSocket tickets, login lockout, a tamper-evident audit chain, non-root containers ([`docs/12-security-hardening.md`](docs/12-security-hardening.md))
+- [x] **Second security audit** — 11 further findings across the robot container, WebRTC path, broker limits, and dev workflow, all fixed and regression-tested ([`docs/security-findings.md`](docs/security-findings.md))
+- [x] **MQTT TLS + mutual TLS** — per-device certificates where the cert CN becomes the MQTT identity
+- [x] **Multi-institution design** — assessment, target architecture, and execution strategy ([`docs/target-architecture.md`](docs/target-architecture.md))
 
 ## ROBOSTORE (demo app-store console, POC)
 
@@ -146,9 +166,17 @@ make health    # curl's the backend, robot, and frontend health endpoints
 ```bash
 $ make health
 Backend:  {"status":"ok","service":"cloud-robotics-backend","mqtt_connected":true,...}
-Robot:    {"status": "ok", "robot_id": "turtlebot3_01", "mqtt_connected": true, ...}
+Robot:    {"status": "ok"}
 Frontend: HTTP 200
 ```
+
+Each line reports independently — if one service is down you still see the other two, which is the moment you most want them:
+
+```bash
+Robot:    unreachable on :8080 (is the robot container running?)
+```
+
+The robot's `/health` deliberately reports **liveness only**. Its full payload — `robot_id`, `mqtt_connected`, uptime, and counters — moved to `/metrics` and `/status`, which are token-protected when `ROBOT_HEALTH_TOKEN` is set, because `robot_id` is also the robot's MQTT username. Fetch them with `make robot-status`. See [`docs/security-findings.md`](docs/security-findings.md) F1.
 
 ### 4. The simulation
 
@@ -156,15 +184,17 @@ The `robot` service brings up a real ROS2 (Humble) + Gazebo simulation of a Turt
 
 The robot starts driving as soon as a `cmd` MQTT message reaches it — you don't need the camera working to command it (see step 7).
 
-### 5. Watching the simulation visually (automatic, if you have a display)
+### 5. Watching the simulation visually (opt-in)
 
-Headless-by-default (step 4) is still the right choice for what actually ships, but it's genuinely useful during development to *see* the physics simulation move as you drive it — not instead of the camera feed, alongside it. `docker-compose.yml`'s `robot` service passes your host's `DISPLAY`/X11 socket through unconditionally, and `simulation.launch.py` checks at startup: if a real `DISPLAY` is present, it launches Gazebo's own GUI (`gzclient`) alongside the headless server automatically - **no extra command needed**, just `docker compose up` (or `make up`) on a normal Linux desktop. On a host with no `DISPLAY` (a real headless server, CI), this is simply skipped and the simulation runs exactly as it always did.
-
-One-time-per-login-session prerequisite on the host (`make up`/`up-test-pattern`/`up-camera` do this automatically; plain `docker compose up` needs it done once yourself first):
+Headless-by-default (step 4) is still the right choice for what actually ships, but it's genuinely useful during development to *see* the physics simulation move as you drive it — not instead of the camera feed, alongside it.
 
 ```bash
-xhost +local:docker
+make up-gui        # instead of `make up`
 ```
+
+This applies [`docker-compose.gui.yml`](docker-compose.gui.yml), which passes your host's `DISPLAY` and mounts the X11 socket read-only; `simulation.launch.py` sees a real `DISPLAY` at startup and launches Gazebo's own GUI (`gzclient`) alongside the headless server.
+
+> **Why this is opt-in rather than automatic.** It used to be neither — every `make up` handed the container access to your X server. X11 has no meaningful isolation between clients on a display: anything with that socket can log keystrokes from other windows, capture the screen, and inject input across your **whole desktop session**, not just the container. That's a fine trade when you're deliberately watching a simulation, and a poor default on every machine on every start. See [`docs/security-findings.md`](docs/security-findings.md) F5. `make up-gui` also narrows the `xhost` grant to your own user (`+SI:localuser:$(id -un)`) rather than the blanket `+local:docker`.
 
 A window opens on your actual desktop showing the Turtlebot3 in its world — drive it from the web console (step 7) and watch it move in both places at once. Needs a real X11 (or XWayland) display on the host; doesn't work over a plain SSH session without `-X`. **First load is slow** (Gazebo's own splash screen, "Preparing your world...", can take a minute or more on a memory-constrained machine while textures/meshes load - this is normal, not a hang; give it time before assuming something's wrong). Closed the window by accident? `make gzclient` re-attaches a fresh viewer without restarting the simulation underneath it.
 
@@ -188,12 +218,21 @@ Switching modes later without a full restart: `CAMERA_TEST_PATTERN_FALLBACK=true
 
 1. Open **http://localhost:3000** (`make open`, or just click it).
 2. Log in — the dev credentials are `operator` / `operator_dev_password` (`OPERATOR_USERNAME`/`OPERATOR_PASSWORD` in `.env`).
+   > **Five wrong passwords locks that IP out for 5 minutes** (`429`, with a `Retry-After`). If login suddenly refuses even the *correct* password, that's the brute-force protection, not a broken stack — wait it out, or clear it with `docker exec cloud-robotics-redis redis-cli -a "$REDIS_PASSWORD" --no-auth-warning --scan --pattern 'login_*' | xargs -r docker exec -i cloud-robotics-redis redis-cli -a "$REDIS_PASSWORD" --no-auth-warning DEL`.
 3. **Dashboard** — your one robot (`turtlebot3_01` by default) appears live, pushed over a WebSocket every 2 seconds. Click it.
 4. **Robot page** — the live video connects automatically (if a camera source is running — see step 6); watch its connection status go `negotiating` → `connected`.
+   > If it shows **`in-use`** with a *"Take over video"* button, another operator already holds the feed. The robot can only serve one WebRTC session, so taking it over ends theirs — which is why it's an explicit button rather than something that happens silently. See [`docs/security-findings.md`](docs/security-findings.md) F3.
 5. Click **Take control** to acquire the exclusive teleop session (see [`docs/07-cloud-backend.md`](docs/07-cloud-backend.md) for what that actually locks). The teleop status turns `connected`.
 6. Drive it: click-and-hold the on-screen arrow buttons, or use the **arrow keys / WASD** on your keyboard — both are throttled to 20 commands/sec while held, and stop the instant you release. Watch the telemetry panel (velocity, position) update in real time.
-7. **Emergency Stop** always works, even without holding control — it's a deliberate safety override (see `fleet/manager.py`'s `send_command()`).
+7. **Emergency Stop** always works, even without holding control *and* is exempt from the server-side command rate limit — a safety override that could be throttled out of delivery would defeat its own purpose (see `fleet/manager.py`'s `send_command()`).
 8. **Release control** when you're done so another operator (or your own next session) can take over. Check **Health** and **Settings** in the nav bar while you're in there.
+9. **Sign out** revokes your token server-side (`POST /auth/logout`), so it can't be replayed if it leaked — not just forgotten locally.
+
+Every login, logout, session acquire/release, and command — including emergency stop — lands in a hash-chained audit trail. Check it hasn't been tampered with at any point:
+
+```bash
+make verify-audit-log     # "OK - N audit_log entries verified, chain intact."
+```
 
 ### 8. Everyday commands
 
@@ -202,6 +241,7 @@ make logs                     # tail every service's logs
 make logs SERVICE=robot       # tail just one
 make restart-robot            # recreate only the robot container (e.g. after editing .env)
 make token                    # fetch a fresh operator JWT for curl'ing the API by hand
+make robot-status             # the robot's full status + metrics (token-protected)
 make down                     # stop everything - Postgres/Redis/Mosquitto data survives
 make clean                    # stop AND wipe volumes (fresh-start data)
 make prune                    # reclaim disk space (dangling images/build cache)
@@ -210,12 +250,57 @@ make prune                    # reclaim disk space (dangling images/build cache)
 ### 9. Running the tests
 
 ```bash
-make test              # the FULL suite: robot + backend + a real-browser frontend E2E run - 80 tests, one command
-make test-robot         # just the robot_agent unit tests
+make test              # the FULL suite: robot + backend + a real-browser frontend E2E run, one command
+make test-robot         # just the robot_agent unit tests (51)
 make test-cloud         # just backend + frontend E2E (needs the stack already up)
 ```
 
+**127 tests** today — 51 robot, 72 backend/integration, 4 real-browser E2E. `make test` sources `.env` so the live tests authenticate with the credentials your stack is actually running; without that they fall back to built-in defaults and trip the login lockout.
+
 See [`docs/10-testing-strategy.md`](docs/10-testing-strategy.md) for what each layer actually proves and why a real Chrome browser is involved, not a mock.
+
+### 10. Security commands
+
+The stack is hardened by default and needs none of these to run — they're for auditing it, and for the extra steps a real deployment needs. Full detail in [`docs/security-findings.md`](docs/security-findings.md).
+
+```bash
+make security-audit      # dependency CVE scan: both requirements.txt + both package.json
+make verify-audit-log    # walk the tamper-evident audit chain, report the first broken link
+```
+
+**Optional: MQTT over TLS.** Off by default (the stack talks over an internal Docker network). To exercise it for real:
+
+```bash
+make certs                              # throwaway local CA + broker cert
+# in .env:  MQTT_TLS_ENABLED=true  MQTT_PORT=8883
+make restart
+make mqtt-tls-check                     # proves TLS works AND rejects an untrusted CA
+```
+
+**Optional: mutual TLS with per-device certificates.** This is the strongest identity model available here — the certificate's CN *becomes* the MQTT username, so a robot proves who it is by holding a CA-signed key rather than sending a guessable id plus a shared password:
+
+```bash
+./scripts/issue-device-cert.sh turtlebot3_01     # CN=turtlebot3_01
+# in .env:  MQTT_MUTUAL_TLS=true
+#           MQTT_TLS_CERTFILE=/mosquitto/certs/turtlebot3_01.crt
+#           MQTT_TLS_KEYFILE=/mosquitto/certs/turtlebot3_01.key
+make restart
+```
+
+`certs/` is gitignored — private keys can't be committed.
+
+### 11. Before deploying anywhere real
+
+The code refuses to start insecure, but only once you tell it this is production:
+
+```bash
+./scripts/generate-secrets.sh >> .env    # real values for every credential
+# then set ENVIRONMENT=production in .env
+```
+
+With `ENVIRONMENT=production`, **both** the backend and the robot refuse to boot if any credential still holds its dev default, if MQTT TLS is off, if certificate verification is disabled, if `ROBOT_HEALTH_TOKEN` is unset, or if CORS still allows a `localhost` origin. A comment telling you to change a password is not a control; this is.
+
+Also replace the development CA — `scripts/generate-dev-certs.sh` leaves its private key unprotected beside the certificates and never rotates. Fine on a laptop, never in a deployment.
 
 No real robot behavior without the stack running — see [Status](#status) below and [`docs/02-docker-foundations.md`](docs/02-docker-foundations.md) for exactly what does and doesn't work today.
 
@@ -302,18 +387,42 @@ not broken.
 
 ## Status
 
-**All 11 planned milestones complete, plus two real post-completion features: live LiDAR and a security hardening pass.** This project is now what its first line always said it would be: a local, Docker-based simulation of a production cloud robotics platform, built end to end and verified for real at every layer — not a demo that only looks right, and not scaffolding waiting to be filled in.
+**All 11 planned milestones complete, plus post-completion work: live LiDAR, two security passes, MQTT mutual TLS, and a design for multi-institution deployment.** This project is now what its first line always said it would be: a local, Docker-based simulation of a production cloud robotics platform, built end to end and verified for real at every layer — not a demo that only looks right, and not scaffolding waiting to be filled in.
 
-**Security hardening** (post-Milestone-11) is a from-scratch audit of everything Milestones 1-11 shipped, done the way a defense/critical-infrastructure security engineer would do it: read the actual auth/MQTT/Docker/nginx code rather than trusting earlier "worth revisiting" comments, then fix what's real. Redis previously had no password at all with its port published to the host — a full session/state bypass requiring zero credentials, now closed. JWTs are now revocable (`POST /auth/logout`) and never travel in a WebSocket URL (a 15-second single-use ticket does instead, verified single-use against a real WebSocket client). Every command — including emergency stop — now lands in a hash-chained, tamper-evident Postgres audit log (`scripts/verify-audit-log.py` proved it catches a hand-edited row). Login brute force now locks out after 5 failed attempts; the backend runs as a non-root container user; a dependency audit found and fixed real CVEs in `PyJWT`/`starlette`. See [`docs/12-security-hardening.md`](docs/12-security-hardening.md) for the full before/after and what's deliberately still left for later (MQTT TLS, real per-operator accounts, a third-party pentest).
+**What it is honestly ready for.** As a **single-institution** system it is solid — 127 tests, hardened by default, with a startup guard that refuses to boot insecure. As a **multi-institution platform** it is not ready, and the reason is specific rather than vague: there is no tenancy model, so two schools cannot safely share one deployment. [`docs/architecture-assessment.md`](docs/architecture-assessment.md) scores both cases with evidence, and [`docs/target-architecture.md`](docs/target-architecture.md) is the design that closes the gap.
+
+**Security** was two passes, not one, and the second found more than the first.
+
+The **first pass** ([`docs/12-security-hardening.md`](docs/12-security-hardening.md)) audited what Milestones 1-11 shipped rather than trusting their own "worth revisiting" comments. Redis had no password at all with its port published to the host — a full session/state bypass needing zero credentials, now closed. JWTs became revocable (`POST /auth/logout`) and no longer travel in a WebSocket URL (a 15-second single-use ticket does, verified single-use against a real WebSocket client). Every command including emergency stop lands in a hash-chained audit log. Login locks out after 5 failed attempts, the backend runs unprivileged, and a dependency audit fixed real CVEs in `PyJWT`/`starlette`.
+
+The **second pass** ([`docs/security-findings.md`](docs/security-findings.md)) deliberately covered what the first never opened — the robot container, the WebRTC path, broker resource limits, the dev workflow — and found 11 more, all now fixed and regression-tested:
+
+- The robot's `/metrics` was unauthenticated on `0.0.0.0` and leaked `robot_id`, **which is also its MQTT username**. `/health` is now liveness-only; identity moved behind a token.
+- The broker had **no message-size limit at all**, so one oversized payload could stall the single event loop serving the whole fleet.
+- Any operator could **silently kill another's video** just by opening the robot page; now an explicit "Take over video" with a rate limit behind it.
+- The robot container ran as root and mounted the **host X11 socket read-write on every `make up`** — keylogging and screen capture of your entire desktop session. Now opt-in via `make up-gui`, read-only, and the container runs as uid 1000.
+- **Mutual TLS** with per-device certificates, where the certificate CN *becomes* the MQTT identity — so a robot proves who it is instead of asserting a public id plus a shared password.
+
+Three of those findings were discovered *while fixing the others* — including one the first hardening pass had itself introduced (its rate limiter made the test suite non-idempotent). All are written up with how they were found, because that's usually more useful than the fix.
+
+Both passes ship with regression tests, and the production startup guard now refuses to boot with a dev credential, TLS disabled, verification off, or a `localhost` CORS origin.
 
 **LiDAR** (post-Milestone-11) follows the exact same pattern as every other real feature here: the Turtlebot3's simulated LDS-01 (`/scan`) flows Robot Cloud Agent → MQTT (`robots/{id}/lidar`, a new topic, same ACL shape as telemetry) → FastAPI (`RobotDetail.lidar`, same registry pattern as telemetry/health) → a new `LidarView` canvas panel on the Robot page, visible alongside the camera feed and teleop controls exactly as asked. Building it surfaced two more real bugs, fixed at the root, not papered over: ROS2's `inf` ("nothing detected") isn't valid JSON and would have crashed `JSON.parse()` on arrival - now converted to `null` at the source; and heavier WebRTC reconnect cycling while iterating on the panel exposed a genuine GStreamer pad-unlinking race that Milestone 9's own reconnect fix had only narrowed, not closed (confirmed via a dedicated 16-reconnect stress test: 14 failures before the fix, 0 after). See [`docs/09-frontend.md`](docs/09-frontend.md) for the full story and [`docs/api-reference.md`](docs/api-reference.md) for the `lidar` topic contract.
 
 **Milestone 11** added the pieces that only make sense once everything else is real: [`docs/00-overview.md`](docs/00-overview.md) now carries actual Mermaid architecture/sequence diagrams (not ASCII sketches) of the topology Milestones 1-10 actually built; [`docs/api-reference.md`](docs/api-reference.md) consolidates every REST endpoint, WebSocket message, and MQTT topic into one lookup doc, cross-checked line-by-line against the current code rather than transcribed from memory; and [`docs/11-aws-migration.md`](docs/11-aws-migration.md) is the concrete, service-by-service AWS migration guide `docs/00-overview.md` has pointed to since Milestone 1 — honest about being a verified *design*, not an executed deployment (no AWS resources were provisioned; the doc says so plainly).
 
-**Milestone 10** built the permanent test suite: `./scripts/run-integration-tests.sh` runs all three containers' tests — **80/80 pass** (32 robot, 48 cloud) — against a live stack in one command, including a real, unmodified Chrome browser (via Playwright) driving the actual frontend through the actual backend to the actual robot. Building it surfaced a real gap (5 robot tests were silently skipped, not run, because `pytest.ini` never reached the container) and fixed it, not just noted it.
+**Milestone 10** built the permanent test suite: `./scripts/run-integration-tests.sh` runs all three containers' tests against a live stack in one command, including a real, unmodified Chrome browser (via Playwright) driving the actual frontend through the actual backend to the actual robot. Building it surfaced a real gap (5 robot tests were silently skipped, not run, because `pytest.ini` never reached the container) and fixed it, not just noted it. It stood at 80 tests then; the security work has since taken it to **127** (51 robot, 72 backend/integration, 4 browser E2E).
 
 **Milestone 9** built the React frontend for real: login, live dashboard, decoding WebRTC video, arrow-button/keyboard teleop, emergency stop — and verifying it against a real browser surfaced two genuine WebRTC bugs (Chrome's mDNS-obfuscated ICE candidates; a shared `webrtcbin` silently breaking reconnects), both fixed at the root rather than worked around. See [`docs/09-frontend.md`](docs/09-frontend.md).
 
 Milestones 1-8 (repo structure, Docker foundations, MQTT layer, Robot Cloud Agent, ROS2/Gazebo integration, WebRTC video streaming, the FastAPI backend, and MQTT-mediated WebRTC signalling) remain complete and unaffected — see [`docs/README.md`](docs/README.md) for the full reading order, each doc still describing exactly what it did and why.
 
-**What's next is genuinely optional, not deferred work**: see [`docs/11-aws-migration.md`](docs/11-aws-migration.md)'s own "Next steps" for what a real production deployment would still need (actually provisioning the AWS infrastructure this guide describes, real per-operator accounts, CI/CD, multi-robot fleet testing) — none of it blocks calling this local simulation done.
+### What's next
+
+**As a local simulation, this is done** — nothing below blocks running, driving, or learning from it.
+
+What's left divides by ambition:
+
+- **Deploying it for one institution** — follow step 11 above. Provision the AWS infrastructure in [`docs/11-aws-migration.md`](docs/11-aws-migration.md), replace the dev CA, and wire CI to run the suite (`scripts/run-integration-tests.sh` is CI-ready; nothing invokes it yet).
+- **Deploying it for many institutions** — read [`docs/architecture-assessment.md`](docs/architecture-assessment.md) first. The blocker is tenancy, not polish: `list_robots()` has no `WHERE` clause and emergency stop reaches every robot in the deployment, so two schools sharing one instance would see and be able to halt each other's robots. [`docs/target-architecture.md`](docs/target-architecture.md) designs the fix and [`docs/execution-strategy.md`](docs/execution-strategy.md) sequences it — **build tenancy before the second institution shares a deployment**, because its cost curve is the steepest thing on that list and it is currently at its lowest point.
+- **One loose end honestly flagged**: the robot container's non-root switch is verified for permissions (Gazebo, ROS2, and their home directories all check out as uid 1000) but has not been run through a full Turtlebot3 world under sustained load, because the machine it was built on was already swapping. `make up-gui` on a host with real memory headroom closes that out.

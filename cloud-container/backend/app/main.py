@@ -58,6 +58,11 @@ async def lifespan(app: FastAPI):
         settings.mqtt_port,
         settings.mqtt_backend_username,
         settings.mqtt_backend_password,
+        tls_enabled=settings.mqtt_tls_enabled,
+        tls_ca_certs=settings.mqtt_tls_ca_certs,
+        tls_certfile=settings.mqtt_tls_certfile,
+        tls_keyfile=settings.mqtt_tls_keyfile,
+        tls_insecure=settings.mqtt_tls_insecure,
     )
     webrtc_relay = WebRTCSignallingRelay(mqtt_service)
 

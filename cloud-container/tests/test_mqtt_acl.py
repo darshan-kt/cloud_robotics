@@ -352,3 +352,49 @@ def test_backend_cannot_publish_camera_answer():
         assert spoofed_payload not in received, (
             "backend must not be able to publish (impersonate) a robot's WebRTC answer"
         )
+
+
+# --- Per-robot credential isolation (docs/security-findings.md F7) ---
+# The robot's MQTT username IS its robot_id, and robot_ids are public (they
+# appear in topics, REST URLs, and the dashboard). That is only safe while
+# each robot holds its OWN password. These two tests pin both halves of
+# that: authentication cannot be reused across robots, and even a correctly
+# authenticated robot cannot write into another robot's namespace.
+
+
+def test_a_robot_cannot_authenticate_as_a_different_robot():
+    """The impersonation case. If the fleet ever shares one password again,
+    this passes trivially for the wrong reason - so it is paired with the
+    ACL test below, which holds regardless of credential design."""
+    with mqtt_client(username="some-other-robot", password=ROBOT_PASSWORD) as (_client, rc):
+        assert rc != 0, (
+            "an unknown robot_id must not be able to authenticate, even with a "
+            "password that is valid for a different robot"
+        )
+
+
+def test_a_robot_cannot_publish_into_another_robots_namespace():
+    """Second layer, independent of credentials: the aclfile's %u pattern
+    scopes every robot to robots/{its own username}/... - so even a robot
+    holding a completely valid credential cannot forge another's telemetry.
+
+    Uses the same observer pattern as the tests above, because MQTT 3.1.1
+    drops a denied PUBLISH silently rather than reporting an error.
+    """
+    victim = "some-other-robot"
+    with mqtt_client(username=BACKEND_USERNAME, password=BACKEND_PASSWORD) as (observer, observer_rc):
+        assert observer_rc == 0
+        received = []
+        observer.on_message = lambda c, u, msg: received.append(msg.payload.decode())
+        observer.subscribe(f"robots/{victim}/telemetry", qos=1)
+        time.sleep(0.3)
+
+        forged = json.dumps({"forged_by": ROBOT_ID, "nonce": uuid.uuid4().hex})
+        with mqtt_client(username=ROBOT_ID, password=ROBOT_PASSWORD) as (publisher, publisher_rc):
+            assert publisher_rc == 0, "positive control: the real robot must authenticate fine"
+            publisher.publish(f"robots/{victim}/telemetry", forged, qos=1)
+
+        time.sleep(MESSAGE_TIMEOUT)
+        assert forged not in received, (
+            f"'{ROBOT_ID}' must not be able to publish into '{victim}'s namespace"
+        )

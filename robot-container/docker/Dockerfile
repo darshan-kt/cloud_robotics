@@ -67,6 +67,27 @@ COPY scripts ./scripts
 COPY robot_agent ./robot_agent
 RUN chmod +x scripts/entrypoint.sh
 
+# --- Drop root (docs/security-findings.md F5) ---
+# Nothing here needs root at runtime: ROS2/Gazebo/GStreamer run fine
+# unprivileged, and the health server binds 8080 (>1024). Camera access is
+# granted by group membership instead (see docker-compose.camera.yml's
+# group_add: video), which is why this doesn't need --privileged either.
+#
+# Deliberately placed AFTER every COPY and the colcon build so those layers
+# stay cached and this adds only a few KB rather than duplicating the
+# ~5 GB image. The build artefacts stay root-owned and world-readable,
+# which is what you want: the runtime user can read them and cannot modify
+# its own code.
+#
+# HOME matters more than it looks - ROS2 writes logs to $HOME/.ros and
+# Gazebo caches models in $HOME/.gazebo. Without a writable home, both fail
+# at startup in ways that look unrelated to permissions.
+RUN useradd --uid 1000 --create-home --shell /bin/bash robot && \
+    mkdir -p /home/robot/.ros/log /home/robot/.gazebo && \
+    chown -R robot:robot /home/robot
+ENV HOME=/home/robot
+USER robot
+
 EXPOSE 8080
 
 # No curl in this base image, so use Python's own stdlib for the check

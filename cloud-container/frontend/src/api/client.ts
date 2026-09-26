@@ -140,10 +140,25 @@ export async function emergencyStop(token: string, robotId: string): Promise<voi
   })
 }
 
-export async function relayWebRTCOffer(token: string, robotId: string, sdp: string): Promise<WebRTCAnswer> {
+/** `takeover` ends whoever currently holds the robot's video feed. Left
+ * false, the backend returns 409 with the current holder's name instead -
+ * see docs/security-findings.md F3 for why taking a feed is deliberate. */
+export async function relayWebRTCOffer(
+  token: string,
+  robotId: string,
+  sdp: string,
+  takeover = false,
+): Promise<WebRTCAnswer> {
   return request<WebRTCAnswer>(`/robots/${encodeURIComponent(robotId)}/webrtc/offer`, {
     method: 'POST',
     token,
-    body: { sdp },
+    body: { sdp, takeover },
+  })
+}
+
+export async function releaseVideoViewer(token: string, robotId: string): Promise<void> {
+  await request<void>(`/robots/${encodeURIComponent(robotId)}/webrtc/viewer`, {
+    method: 'DELETE',
+    token,
   })
 }

@@ -38,6 +38,15 @@ from app.mqtt.topics import (
 
 MessageHandler = Callable[[str, dict], Awaitable[None]]
 
+# Defence in depth alongside mosquitto.conf's own message_size_limit (see
+# docs/security-findings.md F2). The broker is not the only thing that could
+# ever hand this process a payload - a misconfigured broker, a different
+# broker after the AWS migration, or a bug - and json.loads() runs on the
+# single event loop that serves every robot and every dashboard, so an
+# oversized payload here is a fleet-wide stall. Same 256 KB ceiling as the
+# broker; the largest legitimate message is a LiDAR scan at roughly 8 KB.
+MAX_PAYLOAD_BYTES = 262_144
+
 
 class MQTTService:
     def __init__(
@@ -49,6 +58,11 @@ class MQTTService:
         client_id: str = "backend",
         keepalive: int = 30,
         logger: Optional[logging.Logger] = None,
+        tls_enabled: bool = False,
+        tls_ca_certs: str = "",
+        tls_certfile: str = "",
+        tls_keyfile: str = "",
+        tls_insecure: bool = False,
     ):
         self._host = host
         self._port = port
@@ -56,6 +70,21 @@ class MQTTService:
         self._logger = logger or logging.getLogger("backend.mqtt.service")
 
         self._client = mqtt.Client(client_id=client_id)
+        # Must precede connect() - paho applies TLS at socket creation, so
+        # a later tls_set() silently does nothing. See docs/security-findings.md F6.
+        if tls_enabled:
+            self._client.tls_set(
+                ca_certs=tls_ca_certs or None,
+                certfile=tls_certfile or None,
+                keyfile=tls_keyfile or None,
+            )
+            if tls_insecure:
+                self._client.tls_insecure_set(True)
+                self._logger.warning(
+                    "MQTT TLS hostname verification is DISABLED (MQTT_TLS_INSECURE) - "
+                    "never use this outside local bring-up"
+                )
+            self._logger.info(f"MQTT TLS enabled (ca={tls_ca_certs or 'system trust store'})")
         self._client.username_pw_set(username, password)
         self._client.reconnect_delay_set(min_delay=1, max_delay=30)
         self._client.on_connect = self._handle_connect
@@ -150,6 +179,14 @@ class MQTTService:
         robot_id, suffix = parsed
         handlers = self._handlers.get(suffix)
         if not handlers:
+            return
+        # Checked BEFORE decode/parse - the whole point is to never hand an
+        # oversized buffer to json.loads() on the event loop.
+        if len(msg.payload) > MAX_PAYLOAD_BYTES:
+            self._logger.error(
+                f"Oversized payload on {msg.topic} from '{robot_id}': "
+                f"{len(msg.payload)} bytes > {MAX_PAYLOAD_BYTES} - dropped"
+            )
             return
         try:
             payload = json.loads(msg.payload.decode())

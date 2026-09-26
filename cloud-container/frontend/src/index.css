@@ -1,3 +1,81 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Base layer: the cream canvas floor DESIGN.md anchors every surface on,
+ * plus the accessibility defaults the previous stylesheet (three
+ * @tailwind lines) left to the browser. */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-canvas text-body font-sans text-body-md antialiased;
+  }
+
+  /* Display headlines are Cormorant Garamond at 500 with negative
+   * tracking, per DESIGN.md's substitute guidance. Weight 400 in the
+   * real Copernicus; the Garamond substitute is optically lighter, so
+   * 500 is what actually matches the reference colour on screen. */
+  .font-display {
+    font-weight: 500;
+  }
+
+  /* One focus treatment for the whole app. The old build had a focus ring
+   * on two login inputs and nothing else, so keyboard operators lost the
+   * cursor the moment they left the form. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-coral ring-offset-2 ring-offset-canvas rounded-xs;
+  }
+
+  .on-instrument :focus-visible,
+  .on-instrument:focus-visible {
+    @apply ring-offset-instrument;
+  }
+
+  /* Live numerals must not reflow while telemetry polls at 2Hz. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  ::selection {
+    @apply bg-coral/25 text-ink;
+  }
+}
+
+@layer utilities {
+  /* Skip link: off-canvas until focused. */
+  .skip-link {
+    @apply absolute left-4 z-50 -translate-y-24 rounded-md bg-ink px-4 py-2 text-button font-medium text-canvas transition-transform focus:translate-y-4;
+  }
+
+  .scrollbar-slim {
+    scrollbar-width: thin;
+    scrollbar-color: #e6dfd8 transparent;
+  }
+  .scrollbar-slim::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-slim::-webkit-scrollbar-thumb {
+    @apply rounded-pill bg-hairline;
+  }
+  .scrollbar-slim::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* Operators drive robots from this UI. Motion is feedback only, and it
+ * stops entirely when the system asks it to. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

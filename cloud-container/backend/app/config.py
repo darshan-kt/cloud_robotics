@@ -41,6 +41,17 @@ class Settings(BaseModel):
     # for why that boundary is enforced by the broker, not just convention.
     mqtt_backend_username: str = "backend"
     mqtt_backend_password: str = "backend_dev_password"
+    # --- MQTT TLS (docs/security-findings.md F6) ---
+    # Off by default: the backend reaches the broker over the internal
+    # Docker network today. Present so enabling transport security is a
+    # deployment change rather than a code change - and so the AWS IoT Core
+    # migration (which is TLS-only, with client certificates) is a config
+    # swap. See docs/11-aws-migration.md and target-architecture.md D3.
+    mqtt_tls_enabled: bool = False
+    mqtt_tls_ca_certs: str = ""
+    mqtt_tls_certfile: str = ""
+    mqtt_tls_keyfile: str = ""
+    mqtt_tls_insecure: bool = False
 
     redis_host: str = "redis"
     redis_port: int = 6379
@@ -101,8 +112,33 @@ _INSECURE_DEFAULTS = {
 }
 
 
+def _unsafe_production_settings(settings: "Settings") -> list[str]:
+    """Settings that are dangerous in production regardless of whether they
+    still hold a *default* value - a separate category from
+    _INSECURE_DEFAULTS, because these are wrong even when deliberately set.
+    """
+    problems: list[str] = []
+    if settings.mqtt_tls_insecure:
+        problems.append(
+            "mqtt_tls_insecure is on, which disables broker certificate/hostname "
+            "verification and removes most of the value of enabling TLS at all"
+        )
+    if not settings.mqtt_tls_enabled:
+        problems.append(
+            "mqtt_tls_enabled is off - MQTT credentials and telemetry would cross "
+            "the network in plaintext (see docs/security-findings.md F6)"
+        )
+    if any("localhost" in origin or "127.0.0.1" in origin for origin in settings.cors_origins_list):
+        problems.append(
+            f"cors_allowed_origins still includes a localhost origin ({settings.cors_allowed_origins}) - "
+            "set it to the real console origin(s)"
+        )
+    return problems
+
+
 def assert_production_safe(settings: "Settings") -> None:
-    """Refuses to boot rather than silently ship a known dev credential.
+    """Refuses to boot rather than silently ship a known dev credential or
+    an unsafe transport setting.
 
     Every project milestone before this one shipped an "intentionally
     obvious" default (see jwt_secret's own comment) with a comment telling a
@@ -111,16 +147,28 @@ def assert_production_safe(settings: "Settings") -> None:
     already do differently from local dev, so it's the one lever this check
     can safely hang off without breaking `docker compose up`'s zero-config
     promise for everyone still doing local dev. See docs/12-security-hardening.md.
+
+    Two distinct categories are checked, because they fail for different
+    reasons: credentials that were never changed, and settings that are
+    unsafe even when set on purpose.
     """
     if settings.environment != "production":
         return
-    offending = [field for field, default in _INSECURE_DEFAULTS.items() if getattr(settings, field) == default]
-    if offending:
+
+    failures: list[str] = []
+
+    stale = [field for field, default in _INSECURE_DEFAULTS.items() if getattr(settings, field) == default]
+    if stale:
+        failures.append(
+            f"these still hold their insecure development defaults: {', '.join(stale)} "
+            "(generate real values with scripts/generate-secrets.sh)"
+        )
+
+    failures.extend(_unsafe_production_settings(settings))
+
+    if failures:
         raise RuntimeError(
-            "Refusing to start with ENVIRONMENT=production while these settings "
-            f"still hold their insecure development defaults: {', '.join(offending)}. "
-            "Generate real secrets (see scripts/generate-secrets.sh) and set them via "
-            "environment variables before deploying."
+            "Refusing to start with ENVIRONMENT=production:\n  - " + "\n  - ".join(failures)
         )
 
 

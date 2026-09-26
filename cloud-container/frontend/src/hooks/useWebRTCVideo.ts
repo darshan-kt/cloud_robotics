@@ -14,22 +14,32 @@
  * and the connection never progresses past "negotiating" even though
  * signalling itself succeeded.
  */
-import { useEffect, useRef, useState, type RefObject } from 'react'
-import { relayWebRTCOffer } from '../api/client'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { ApiError, relayWebRTCOffer } from '../api/client'
 import { getRuntimeConfig } from '../config'
 
-export type WebRTCVideoState = 'idle' | 'negotiating' | 'connected' | 'failed'
+/** 'in-use' is its own state, not just an error string: the robot's video
+ * feed is held by another operator, and the UI can offer to take it over
+ * rather than presenting a dead end. See docs/security-findings.md F3. */
+export type WebRTCVideoState = 'idle' | 'negotiating' | 'connected' | 'failed' | 'in-use'
 
 interface UseWebRTCVideoResult {
   videoRef: RefObject<HTMLVideoElement>
   state: WebRTCVideoState
   error: string | null
+  /** Re-negotiates, ending the current holder's stream. Only meaningful
+   * while state === 'in-use'. */
+  takeOver: () => void
 }
 
 export function useWebRTCVideo(token: string | null, robotId: string | null, enabled: boolean): UseWebRTCVideoResult {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [state, setState] = useState<WebRTCVideoState>('idle')
   const [error, setError] = useState<string | null>(null)
+  // Bumping this re-runs the effect with takeover=true.
+  const [takeoverNonce, setTakeoverNonce] = useState(0)
+
+  const takeOver = useCallback(() => setTakeoverNonce((n) => n + 1), [])
 
   useEffect(() => {
     if (!token || !robotId || !enabled) {
@@ -75,21 +85,30 @@ export function useWebRTCVideo(token: string | null, robotId: string | null, ena
       if (cancelled || !pc.localDescription) return
 
       try {
-        const { sdp } = await relayWebRTCOffer(token as string, robotId as string, pc.localDescription.sdp)
+        const { sdp } = await relayWebRTCOffer(
+          token as string,
+          robotId as string,
+          pc.localDescription.sdp,
+          // Only the explicit takeOver() path claims a feed someone else
+          // holds - a first attempt never silently ends another operator's
+          // stream.
+          takeoverNonce > 0,
+        )
         if (cancelled || !pc) return
         await pc.setRemoteDescription({ type: 'answer', sdp })
       } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err))
-          setState('failed')
-        }
+        if (cancelled) return
+        setError(err instanceof Error ? err.message : String(err))
+        // 409 means another operator holds the feed - recoverable via
+        // takeOver(), so it gets its own state rather than 'failed'.
+        setState(err instanceof ApiError && err.status === 409 ? 'in-use' : 'failed')
       }
     }
 
     negotiate().catch((err) => {
       if (!cancelled) {
         setError(err instanceof Error ? err.message : String(err))
-        setState('failed')
+        setState(err instanceof ApiError && err.status === 409 ? 'in-use' : 'failed')
       }
     })
 
@@ -98,9 +117,9 @@ export function useWebRTCVideo(token: string | null, robotId: string | null, ena
       pc?.close()
       if (videoRef.current) videoRef.current.srcObject = null
     }
-  }, [token, robotId, enabled])
+  }, [token, robotId, enabled, takeoverNonce])
 
-  return { videoRef, state, error }
+  return { videoRef, state, error, takeOver }
 }
 
 function waitForIceGatheringComplete(pc: RTCPeerConnection): Promise<void> {

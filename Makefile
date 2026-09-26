@@ -57,7 +57,7 @@ build: setup ## Build all Docker images (backend, frontend, robot)
 
 ## --- Running the stack ---
 
-up: setup _xhost ## Start the full stack (7 services). Gazebo's GUI opens automatically if DISPLAY is set (see README.md); no real webcam feed unless you also use `make up-camera` or `make up-test-pattern`.
+up: setup ## Start the full stack (7 services). Headless - use `make up-gui` to also watch Gazebo's own window; no real webcam feed unless you also use `make up-camera` or `make up-test-pattern`.
 	docker compose up -d --build
 	@$(MAKE) --no-print-directory _wait-healthy
 	@echo
@@ -66,17 +66,22 @@ up: setup _xhost ## Start the full stack (7 services). Gazebo's GUI opens automa
 	@echo "  Backend:  http://localhost:$(BACKEND_PORT)/health"
 	@echo "  Robot:    http://localhost:$(ROBOT_HEALTH_PORT)/health"
 
-up-test-pattern: setup _xhost ## Start the stack with a SYNTHETIC camera pattern (no physical webcam needed) - see docs/06-video-streaming.md
+up-test-pattern: setup ## Start the stack with a SYNTHETIC camera pattern (no physical webcam needed) - see docs/06-video-streaming.md
 	CAMERA_TEST_PATTERN_FALLBACK=true docker compose up -d --build
 	@$(MAKE) --no-print-directory _wait-healthy
 	@echo "Stack is up with a synthetic test-pattern camera feed. Console: http://localhost:$(FRONTEND_PORT)"
 
-up-camera: setup _xhost ## Start the stack with your REAL webcam passed through (requires CAMERA_DEVICE in .env, default /dev/video0) - see docker-compose.camera.yml
+up-camera: setup ## Start the stack with your REAL webcam passed through (requires CAMERA_DEVICE in .env, default /dev/video0) - see docker-compose.camera.yml
 	docker compose -f docker-compose.yml -f docker-compose.camera.yml up -d --build
 	@$(MAKE) --no-print-directory _wait-healthy
 	@echo "Stack is up with a real webcam feed. Console: http://localhost:$(FRONTEND_PORT)"
 
-gzclient: ## Re-open Gazebo's GUI window by hand (it already opens automatically on `make up`/`docker compose up` if DISPLAY is set - this is only for reattaching after closing it)
+up-gui: setup _xhost ## Start the stack AND open Gazebo's GUI window (grants the container X11 access - see docs/security-findings.md F5)
+	docker compose -f docker-compose.yml -f docker-compose.gui.yml up -d --build
+	@$(MAKE) --no-print-directory _wait-healthy
+	@echo "Stack is up with Gazebo's GUI. Console: http://localhost:$(FRONTEND_PORT)"
+
+gzclient: ## Re-open Gazebo's GUI window by hand (needs the stack started with `make up-gui`)
 	docker exec -it cloud-robotics-robot gzclient
 
 _wait-healthy:
@@ -84,15 +89,17 @@ _wait-healthy:
 	@until curl -sf http://localhost:$(BACKEND_PORT)/health >/dev/null 2>&1; do sleep 1; done
 	@until curl -sf http://localhost:$(ROBOT_HEALTH_PORT)/health >/dev/null 2>&1; do sleep 1; done
 
-# Grants local Docker containers access to the host's X server, so the
-# robot container's auto-launched gzclient can actually open a window -
-# see docker-compose.yml's robot service and simulation.launch.py. Best-
-# effort and silent: on a host with no X server (or no `xhost` binary -
-# e.g. Windows/macOS Docker Desktop, a headless server) this is a no-op,
-# never a failure - DISPLAY simply won't be set either, and the launch
-# file already runs headless in that case regardless of this step.
+# Grants X server access so the robot container's gzclient can open a
+# window. Only invoked by `up-gui` now, never by the default `up` - see
+# docs/security-findings.md F5 for why handing every container X11 access
+# on every start was the wrong default.
+# `+SI:localuser:$(id -un)` scopes this to YOUR user rather than the
+# blanket `+local:` (which grants every local connection, including other
+# containers). Best-effort and silent: on a host with no X server or no
+# `xhost` binary this is a no-op, and the launch file already runs headless
+# in that case.
 _xhost:
-	@command -v xhost >/dev/null 2>&1 && xhost +local:docker >/dev/null 2>&1 || true
+	@command -v xhost >/dev/null 2>&1 && xhost +SI:localuser:$$(id -un) >/dev/null 2>&1 || true
 
 down: ## Stop the stack (keeps volumes - Postgres/Redis/Mosquitto data survives)
 	docker compose down
@@ -112,10 +119,21 @@ status: ps ## Alias for `ps`
 logs: ## Tail logs - all services, or one: `make logs SERVICE=robot`
 	docker compose logs -f $(SERVICE)
 
+# Every line reports independently: a health check that aborts the whole
+# target on the first unreachable service tells you least exactly when you
+# need it most (something is down and you want to know what else is).
 health: ## Curl the backend, robot, and frontend health endpoints
-	@printf "Backend:  " && curl -sf http://localhost:$(BACKEND_PORT)/health && echo
-	@printf "Robot:    " && curl -sf http://localhost:$(ROBOT_HEALTH_PORT)/health && echo
-	@printf "Frontend: " && curl -sf -o /dev/null -w "HTTP %{http_code}\n" http://localhost:$(FRONTEND_PORT)/
+	@printf "Backend:  " && (curl -sf http://localhost:$(BACKEND_PORT)/health && echo || echo "unreachable on :$(BACKEND_PORT)")
+	@printf "Robot:    " && (curl -sf http://localhost:$(ROBOT_HEALTH_PORT)/health && echo || echo "unreachable on :$(ROBOT_HEALTH_PORT) (is the robot container running?)")
+	@printf "Frontend: " && (curl -sf -o /dev/null -w "HTTP %{http_code}\n" http://localhost:$(FRONTEND_PORT)/ || echo "unreachable on :$(FRONTEND_PORT)")
+
+robot-status: ## Full robot status/metrics (token-protected if ROBOT_HEALTH_TOKEN is set - see docs/security-findings.md F1)
+	@printf "Status:   " && (curl -sf $(if $(ROBOT_HEALTH_TOKEN),-H "Authorization: Bearer $(ROBOT_HEALTH_TOKEN)",) \
+		http://localhost:$(ROBOT_HEALTH_PORT)/status && echo \
+		|| echo "unreachable or unauthorized (set ROBOT_HEALTH_TOKEN if the robot has one)")
+	@printf "Metrics:  " && (curl -sf $(if $(ROBOT_HEALTH_TOKEN),-H "Authorization: Bearer $(ROBOT_HEALTH_TOKEN)",) \
+		http://localhost:$(ROBOT_HEALTH_PORT)/metrics && echo \
+		|| echo "unreachable or unauthorized (set ROBOT_HEALTH_TOKEN if the robot has one)")
 
 token: ## Fetch a fresh operator JWT and print it (handy for `curl -H "Authorization: Bearer $$(make -s token)"`)
 	@curl -s -X POST http://localhost:$(BACKEND_PORT)/auth/login \
@@ -136,7 +154,12 @@ test: ## Run the FULL three-container integration suite (robot + backend + real-
 test-robot: ## Run only the robot_agent unit tests, inside the live robot container
 	docker cp robot-container/tests cloud-robotics-robot:/robot/tests
 	docker cp robot-container/pytest.ini cloud-robotics-robot:/robot/pytest.ini
-	docker compose exec robot bash -c "pip install -q -r /robot/tests/requirements.txt && cd /robot && python3 -m pytest tests/ -v"
+	# -u root: the agent itself runs unprivileged (docs/security-findings.md F5),
+	# but `docker cp` lands these files root-owned and pytest needs to write
+	# .pytest_cache next to them. Running the TEST path as root is fine - it
+	# exercises the same agent code either way - and is simpler than
+	# chown-ing copied files on every run.
+	docker compose exec -u root robot bash -c "pip install -q -r /robot/tests/requirements.txt && cd /robot && python3 -m pytest tests/ -v"
 
 test-cloud: ## Run only the backend + real-browser frontend E2E tests, on the host, against the live stack
 	pip install -q -r cloud-container/tests/requirements.txt
@@ -155,8 +178,29 @@ security-audit: ## Dependency vulnerability scan - both Python requirements.txt 
 	@echo "--- robostore-poc ---"
 	cd robostore-poc && npm audit --omit=dev
 
+# POSTGRES_HOST is overridden to localhost because this runs on the HOST,
+# where "postgres" (the Docker service name in .env) doesn't resolve. The
+# port is loopback-published for exactly this kind of tooling.
 verify-audit-log: ## Walk the tamper-evident audit_log hash chain and report the first broken link, if any
-	python3 scripts/verify-audit-log.py
+	@POSTGRES_HOST=localhost POSTGRES_PORT=$(POSTGRES_PORT) python3 scripts/verify-audit-log.py
+
+certs: ## Generate throwaway local TLS certificates so MQTT-over-TLS can be exercised (see docs/security-findings.md F6)
+	@./scripts/generate-dev-certs.sh
+
+mqtt-tls-check: ## Prove the broker's TLS listener works and rejects an untrusted CA
+	@echo "--- TLS connect with the real CA (expect: publish succeeds) ---"
+	@docker exec cloud-robotics-mosquitto mosquitto_pub \
+		-h localhost -p 8883 --cafile /mosquitto/certs/ca.crt \
+		-u "$(MQTT_BACKEND_USERNAME)" -P "$(MQTT_BACKEND_PASSWORD)" \
+		-t 'robots/tls-probe/cmd' -m 'tls-ok' -q 1 \
+		&& echo "    OK - TLS handshake + auth + publish succeeded"
+	@echo "--- TLS connect with NO CA (expect: rejected) ---"
+	@docker exec cloud-robotics-mosquitto mosquitto_pub \
+		-h localhost -p 8883 \
+		-u "$(MQTT_BACKEND_USERNAME)" -P "$(MQTT_BACKEND_PASSWORD)" \
+		-t 'robots/tls-probe/cmd' -m 'should-fail' -q 1 \
+		2>/dev/null && echo "    UNEXPECTED - connected without verifying the broker" \
+		|| echo "    OK - refused without a trusted CA"
 
 ## --- ROBOSTORE (robostore-poc/, demo app-store console, POC) ---
 ## Entirely separate from the stack above - its own compose file
