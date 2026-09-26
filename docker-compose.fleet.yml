@@ -1,0 +1,105 @@
+# Extra fleet members — overlay, applied ON TOP of docker-compose.yml.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.fleet.yml up -d
+#   # or just: make up-fleet
+#
+# Why an overlay rather than three `robot:` services in the main file: the
+# default `make up` must stay a one-robot stack. The full robot container runs
+# ROS2 Humble, Gazebo and GStreamer and is capped at 3.5 GB; three of those is
+# more RAM than most dev machines have, and the README's stated requirement is
+# ~6 GB for the whole stack. Making a fleet the default would break first-run
+# for anyone on a normal laptop.
+#
+# These two run robot_agent with MockROSAdapter (docker/sim.Dockerfile). At the
+# MQTT boundary they are indistinguishable from the real one: same package,
+# same topics, same per-robot credential, same ACL scoping by `%u`, and they
+# self-register in Postgres on their first publish exactly as turtlebot3_01
+# does. What they do not have is a camera — see robot_agent/sim_main.py.
+#
+# IMPORTANT: each robot needs its own broker credential. The single
+# MQTT_ROBOT_PASSWORD path only provisions ROBOT_ID, so a fleet requires
+# MQTT_ROBOT_CREDENTIALS to be set — see .env.example and
+# cloud-container/mosquitto/docker-entrypoint-wrapper.sh. Without it these two
+# authenticate as unknown users and the broker refuses them.
+
+services:
+  robot-02:
+    build:
+      context: ./robot-container
+      dockerfile: docker/sim.Dockerfile
+    container_name: cloud-robotics-robot-02
+    networks:
+      - cloud-robotics-net
+    # Same loopback-only treatment as the primary robot's health port: the
+    # /metrics payload carries robot_id, which IS the MQTT username.
+    # See docs/security-findings.md F1.
+    ports:
+      - "127.0.0.1:${ROBOT_02_HEALTH_PORT:-8180}:8080"
+    volumes:
+      - ./certs:/mosquitto/certs:ro
+    environment:
+      ROBOT_ID: ${ROBOT_02_ID:-turtlebot3_02}
+      MQTT_HOST: ${MQTT_HOST:-mosquitto}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_ROBOT_PASSWORD: ${ROBOT_02_MQTT_PASSWORD:-robot_dev_password_02}
+      ROBOT_HEALTH_PORT: 8080
+      ROBOT_HEALTH_TOKEN: ${ROBOT_HEALTH_TOKEN:-}
+      MQTT_TLS_ENABLED: ${MQTT_TLS_ENABLED:-false}
+      MQTT_TLS_CA_CERTS: ${MQTT_TLS_CA_CERTS:-}
+      MQTT_TLS_CERTFILE: ${MQTT_TLS_CERTFILE:-}
+      MQTT_TLS_KEYFILE: ${MQTT_TLS_KEYFILE:-}
+      MQTT_TLS_INSECURE: ${MQTT_TLS_INSECURE:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Two orders of magnitude below the real robot's 3.5G, which is the whole
+    # argument for this image existing.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
+  robot-03:
+    build:
+      context: ./robot-container
+      dockerfile: docker/sim.Dockerfile
+    container_name: cloud-robotics-robot-03
+    networks:
+      - cloud-robotics-net
+    ports:
+      - "127.0.0.1:${ROBOT_03_HEALTH_PORT:-8181}:8080"
+    volumes:
+      - ./certs:/mosquitto/certs:ro
+    environment:
+      ROBOT_ID: ${ROBOT_03_ID:-turtlebot3_03}
+      MQTT_HOST: ${MQTT_HOST:-mosquitto}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_ROBOT_PASSWORD: ${ROBOT_03_MQTT_PASSWORD:-robot_dev_password_03}
+      ROBOT_HEALTH_PORT: 8080
+      ROBOT_HEALTH_TOKEN: ${ROBOT_HEALTH_TOKEN:-}
+      MQTT_TLS_ENABLED: ${MQTT_TLS_ENABLED:-false}
+      MQTT_TLS_CA_CERTS: ${MQTT_TLS_CA_CERTS:-}
+      MQTT_TLS_CERTFILE: ${MQTT_TLS_CERTFILE:-}
+      MQTT_TLS_KEYFILE: ${MQTT_TLS_KEYFILE:-}
+      MQTT_TLS_INSECURE: ${MQTT_TLS_INSECURE:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M

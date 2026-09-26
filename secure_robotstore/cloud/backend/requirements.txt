@@ -1,0 +1,8 @@
+# Pinned to the same major versions as cloud-container/backend so moving
+# code between the two does not mean learning a different API.
+fastapi==0.115.6
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+paho-mqtt==1.6.1
+asyncpg==0.29.0
+redis==5.0.8

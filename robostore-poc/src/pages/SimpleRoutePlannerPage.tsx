@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
-import { Crosshair, MapPin, Route, Send, Upload, X } from "lucide-react";
-import { Header } from "../components/layout/Header";
-import { Card, Badge, Button } from "../components/ui/Layout";
+import { Crosshair, MapPin, Send, Upload, X } from "lucide-react";
+import { AppShell } from "../components/layout/AppShell";
+import { Button, Chip, EmptyState, Panel } from "../components/ui/Layout";
+import { Readout, SignalTag } from "../components/ui/Signal";
+import { useEmergencyStop } from "../hooks/useEmergencyStop";
 import { useToast } from "../components/ui/Toast";
 import * as localDb from "../lib/localDb";
 import { GATEWAY_URL } from "../lib/config";
@@ -33,16 +35,16 @@ const DEFAULT_MAP_META: MapMeta = { resolution: 0.05, origin_x: -10.0, origin_y:
 // rooms, a center silo - just enough to have something real to click
 // waypoints onto without requiring a robot or a real map upload first.
 const WAREHOUSE_FLOOR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
-  <rect width="800" height="600" fill="#e2e8f0"/>
-  <rect x="20" y="20" width="760" height="560" fill="none" stroke="#0a1b20" stroke-width="8"/>
-  <line x1="400" y1="20" x2="400" y2="300" stroke="#0a1b20" stroke-width="6"/>
-  <line x1="20" y1="300" x2="780" y2="300" stroke="#0a1b20" stroke-width="6"/>
-  <line x1="400" y1="300" x2="400" y2="580" stroke="#0a1b20" stroke-width="6"/>
-  <circle cx="400" cy="300" r="45" fill="#94a3b8" stroke="#0a1b20" stroke-width="4"/>
-  <text x="90" y="160" font-family="monospace" font-size="20" fill="#334155">ROOM A</text>
-  <text x="490" y="160" font-family="monospace" font-size="20" fill="#334155">ROOM B</text>
-  <text x="90" y="440" font-family="monospace" font-size="20" fill="#334155">ROOM C</text>
-  <text x="490" y="440" font-family="monospace" font-size="20" fill="#334155">ROOM D</text>
+  <rect width="800" height="600" fill="#2a2825"/>
+  <rect x="20" y="20" width="760" height="560" fill="none" stroke="#7d7a73" stroke-width="6"/>
+  <line x1="400" y1="20" x2="400" y2="300" stroke="#57544e" stroke-width="5"/>
+  <line x1="20" y1="300" x2="780" y2="300" stroke="#57544e" stroke-width="5"/>
+  <line x1="400" y1="300" x2="400" y2="580" stroke="#57544e" stroke-width="5"/>
+  <circle cx="400" cy="300" r="45" fill="#3a3733" stroke="#7d7a73" stroke-width="4"/>
+  <text x="90" y="160" font-family="monospace" font-size="20" fill="#a09d96">ROOM A</text>
+  <text x="490" y="160" font-family="monospace" font-size="20" fill="#a09d96">ROOM B</text>
+  <text x="90" y="440" font-family="monospace" font-size="20" fill="#a09d96">ROOM C</text>
+  <text x="490" y="440" font-family="monospace" font-size="20" fill="#a09d96">ROOM D</text>
 </svg>`;
 const WAREHOUSE_MAP_DATA_URI = `data:image/svg+xml;base64,${btoa(WAREHOUSE_FLOOR_SVG)}`;
 
@@ -115,7 +117,7 @@ interface RenderState {
 
 function renderRouteCanvas(ctx: CanvasRenderingContext2D, state: RenderState) {
   ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  ctx.fillStyle = "#0a1b20";
+  ctx.fillStyle = "#100f0d";
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
   const { mapImage, layout, mapMeta, waypoints, pendingWaypoint, mousePos, telemetry, localisation, plan } = state;
@@ -126,7 +128,7 @@ function renderRouteCanvas(ctx: CanvasRenderingContext2D, state: RenderState) {
   }
 
   // (2) Grid overlay
-  ctx.strokeStyle = "rgba(56, 189, 248, 0.08)";
+  ctx.strokeStyle = "rgba(160, 157, 150, 0.07)";
   ctx.lineWidth = 1;
   for (let x = 0; x <= CANVAS_WIDTH; x += 40) {
     ctx.beginPath();
@@ -146,7 +148,7 @@ function renderRouteCanvas(ctx: CanvasRenderingContext2D, state: RenderState) {
   if (mapImage && layout && plan && plan.points.length >= 2) {
     const pts = plan.points.map((p) => worldToCanvas(p.x, p.y, mapImage, layout, mapMeta));
     ctx.lineWidth = 7;
-    ctx.strokeStyle = "rgba(0, 229, 160, 0.18)";
+    ctx.strokeStyle = "rgba(204, 120, 92, 0.25)";
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
     ctx.setLineDash([]);
@@ -156,7 +158,7 @@ function renderRouteCanvas(ctx: CanvasRenderingContext2D, state: RenderState) {
     ctx.stroke();
 
     ctx.lineWidth = 2.5;
-    ctx.strokeStyle = "#00e5a0";
+    ctx.strokeStyle = "#cc785c";
     ctx.setLineDash([10, 8]);
     ctx.lineDashOffset = -((Date.now() / 40) % 18);
     ctx.beginPath();
@@ -168,16 +170,16 @@ function renderRouteCanvas(ctx: CanvasRenderingContext2D, state: RenderState) {
 
   // (4) Placed waypoints
   waypoints.forEach((wp) => {
-    ctx.fillStyle = "rgba(255, 176, 32, 0.2)";
+    ctx.fillStyle = "rgba(204, 120, 92, 0.22)";
     ctx.beginPath();
     ctx.arc(wp.x, wp.y, 16, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = "#ffb020";
+    ctx.fillStyle = "#cc785c";
     ctx.beginPath();
     ctx.arc(wp.x, wp.y, 9, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#0a1b20";
+    ctx.fillStyle = "#100f0d";
     ctx.font = "bold 10px monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -188,7 +190,7 @@ function renderRouteCanvas(ctx: CanvasRenderingContext2D, state: RenderState) {
     if (wp.theta !== undefined) {
       const ax = wp.x + Math.cos(wp.theta) * 22;
       const ay = wp.y + Math.sin(wp.theta) * 22;
-      ctx.strokeStyle = "#ffb020";
+      ctx.strokeStyle = "#e8a55a";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(wp.x, wp.y);
@@ -200,7 +202,7 @@ function renderRouteCanvas(ctx: CanvasRenderingContext2D, state: RenderState) {
   // (5) Live robot marker - telemetry.x/y used AS canvas pixels directly.
   if (telemetry) {
     const pulseR = 14 + Math.sin(Date.now() / 150) * 3;
-    ctx.strokeStyle = "rgba(168, 85, 247, 0.6)";
+    ctx.strokeStyle = "rgba(93, 184, 166, 0.55)";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(telemetry.x, telemetry.y, pulseR, 0, Math.PI * 2);
@@ -208,7 +210,7 @@ function renderRouteCanvas(ctx: CanvasRenderingContext2D, state: RenderState) {
 
     const hx = telemetry.x + Math.cos(telemetry.theta) * 18;
     const hy = telemetry.y - Math.sin(telemetry.theta) * 18;
-    ctx.strokeStyle = "#a855f7";
+    ctx.strokeStyle = "#5db8a6";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(telemetry.x, telemetry.y);
@@ -230,14 +232,14 @@ function renderRouteCanvas(ctx: CanvasRenderingContext2D, state: RenderState) {
     [0, 750].forEach((phaseShift) => {
       const t = ((now + phaseShift) % 1500) / 1500;
       const r = 8 + t * 30;
-      ctx.strokeStyle = `rgba(56, 189, 248, ${(1 - t) * 0.7})`;
+      ctx.strokeStyle = `rgba(93, 184, 166, ${(1 - t) * 0.7})`;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.stroke();
     });
 
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.25)";
+    ctx.strokeStyle = "rgba(93, 184, 166, 0.25)";
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(p.x, p.y, 22, 0, Math.PI * 2);
@@ -258,7 +260,7 @@ function renderRouteCanvas(ctx: CanvasRenderingContext2D, state: RenderState) {
     ctx.restore();
 
     const coreR = 6 + Math.sin(now / 300) * 0.8;
-    ctx.fillStyle = "#38bdf8";
+    ctx.fillStyle = "#faf9f5";
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -269,12 +271,12 @@ function renderRouteCanvas(ctx: CanvasRenderingContext2D, state: RenderState) {
 
   // (7) Pending-waypoint ghost preview
   if (pendingWaypoint) {
-    ctx.fillStyle = "rgba(255, 176, 32, 0.5)";
+    ctx.fillStyle = "rgba(232, 165, 90, 0.5)";
     ctx.beginPath();
     ctx.arc(pendingWaypoint.x, pendingWaypoint.y, 9, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = "rgba(255, 176, 32, 0.6)";
+    ctx.strokeStyle = "rgba(232, 165, 90, 0.6)";
     ctx.lineWidth = 2;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
@@ -293,7 +295,7 @@ const SCAN_CANVAS_SIZE = 220;
 function renderScanPolar(ctx: CanvasRenderingContext2D, scan: ScanFrame | null) {
   const size = SCAN_CANVAS_SIZE;
   ctx.clearRect(0, 0, size, size);
-  ctx.fillStyle = "#0a1b20";
+  ctx.fillStyle = "#100f0d";
   ctx.fillRect(0, 0, size, size);
 
   const cx = size / 2;
@@ -301,7 +303,7 @@ function renderScanPolar(ctx: CanvasRenderingContext2D, scan: ScanFrame | null) 
   const maxRange = scan?.range_max ?? 3.5;
   const radius = size / 2 - 12;
 
-  ctx.strokeStyle = "rgba(56, 189, 248, 0.2)";
+  ctx.strokeStyle = "rgba(160, 157, 150, 0.16)";
   ctx.lineWidth = 1;
   [0.25, 0.5, 0.75, 1.0].forEach((frac) => {
     ctx.beginPath();
@@ -317,7 +319,7 @@ function renderScanPolar(ctx: CanvasRenderingContext2D, scan: ScanFrame | null) 
 
   if (scan) {
     const pxPerM = radius / maxRange;
-    ctx.fillStyle = "#ff4d6a";
+    ctx.fillStyle = "#c64545";
     scan.ranges.forEach((r, i) => {
       if (r === null || r < scan.range_min) return;
       const angle = scan.angle_min + i * scan.angle_increment;
@@ -327,7 +329,7 @@ function renderScanPolar(ctx: CanvasRenderingContext2D, scan: ScanFrame | null) 
     });
   }
 
-  ctx.fillStyle = "#00e5a0";
+  ctx.fillStyle = "#cc785c";
   ctx.beginPath();
   ctx.arc(cx, cy, 3, 0, Math.PI * 2);
   ctx.fill();
@@ -356,7 +358,10 @@ export function SimpleRoutePlannerPage() {
   const [mapMeta, setMapMeta] = useState<MapMeta>(DEFAULT_MAP_META);
   const [pendingWaypoint, setPendingWaypoint] = useState<Point | null>(null);
   const [mousePos, setMousePos] = useState<Point>({ x: 0, y: 0 });
-  const [eStopActive, setEStopActive] = useState(false);
+
+  // Dispatch is blocked while the stop is latched. Same subscription the
+  // command bar and the E-Stop page use, so all three always agree.
+  const { isActive: eStopActive } = useEmergencyStop();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scanCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -387,12 +392,6 @@ export function SimpleRoutePlannerPage() {
   const scanRef = useRef<ScanFrame | null>(null);
   scanRef.current = scan;
 
-  // ---- E-Stop wiring - correctly wired to the shared system, unlike
-  // Remote Controller's cosmetic button (see robostore-poc/README.md).
-  useEffect(() => {
-    localDb.getEmergencyStops(1).then((stops) => setEStopActive(stops[0]?.is_active ?? false));
-    return localDb.onEmergencyStopUpdated((entry) => setEStopActive(entry.is_active));
-  }, []);
 
   // ---- Map loading, source 1: a static /map.pgm at the web root -----
   useEffect(() => {
@@ -661,147 +660,235 @@ export function SimpleRoutePlannerPage() {
   const farthestRange = validBeams.length ? Math.max(...validBeams) : null;
 
   return (
-    <div className="min-h-screen">
-      <Header showBack title="Simple Route Planner" icon={Route} iconColor="text-amber-400" />
-
-      <main className="mx-auto max-w-6xl px-4 py-6">
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_360px]">
-          {/* Map canvas + waypoint list */}
-          <div className="space-y-4">
-            <Card className="p-3">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant={drawMode ? "primary" : "outline"}
-                    size="sm"
-                    icon={<MapPin className="h-3.5 w-3.5" />}
-                    onClick={() => {
-                      setDrawMode((v) => !v);
-                      setPendingWaypoint(null);
-                    }}
-                  >
-                    {drawMode ? "Placing waypoint..." : "Place waypoint"}
-                  </Button>
-                  {selectedMap && <Badge theme="blue">{selectedMap.name}</Badge>}
-                </div>
-                <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-mono text-xs text-textMuted hover:bg-card">
+    <AppShell
+      title="Route Planner"
+      toolbar={
+        <div className="hidden items-center gap-md md:flex">
+          <SignalTag
+            state={localisation ? "live" : "absent"}
+            label={localisation ? "AMCL FIX" : "NO AMCL FIX"}
+          />
+        </div>
+      }
+    >
+      <div className="mx-auto grid max-w-[1500px] lg:h-full grid-cols-1 gap-lg lg:grid-cols-[1fr_340px]">
+        {/* ---- Left: the map ---- */}
+        <div className="flex min-h-0 flex-col gap-lg">
+          <Panel
+            flush
+            className="min-h-[360px] flex-1"
+            title="Floor map"
+            action={
+              <>
+                {selectedMap && <Chip>{selectedMap.name}</Chip>}
+                <Button
+                  variant={drawMode ? "primary" : "secondary"}
+                  size="sm"
+                  icon={<MapPin className="h-3.5 w-3.5" />}
+                  onClick={() => {
+                    setDrawMode((v) => !v);
+                    setPendingWaypoint(null);
+                  }}
+                >
+                  {drawMode ? "Click to place" : "Place waypoint"}
+                </Button>
+                <label className="flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-line bg-elevated px-3 font-sans text-[13px] font-medium text-ink transition-colors hover:border-faint/60">
                   <Upload className="h-3.5 w-3.5" />
-                  {isUploading ? "Loading..." : "Upload map"}
-                  <input type="file" accept=".pgm,.png,.jpg,.jpeg" onChange={handleUpload} disabled={isUploading} className="hidden" />
+                  {isUploading ? "Loading…" : "Upload"}
+                  <input
+                    type="file"
+                    accept=".pgm,.png,.jpg,.jpeg"
+                    onChange={handleUpload}
+                    disabled={isUploading}
+                    className="hidden"
+                  />
                 </label>
-              </div>
+              </>
+            }
+          >
+            {/* The canvas keeps its fixed internal resolution and scales to
+                the panel, so the map fills the height the shell gives it
+                rather than sitting in a fixed box with dead space below. */}
+            <div className="flex min-h-0 flex-1 items-center justify-center p-sm">
               <canvas
                 ref={canvasRef}
                 width={CANVAS_WIDTH}
                 height={CANVAS_HEIGHT}
                 onClick={handleCanvasClick}
                 onMouseMove={handleCanvasMouseMove}
-                className={`w-full rounded-xl border border-border/50 ${drawMode ? "cursor-crosshair" : "cursor-default"}`}
+                aria-label="Floor map — click to place waypoints"
+                className={`max-h-full max-w-full rounded-md ${
+                  drawMode ? "cursor-crosshair" : "cursor-default"
+                }`}
               />
-              {loading && <p className="mt-2 px-1 font-mono text-[11px] text-textDim">Loading map...</p>}
-            </Card>
-
-            <Card className="p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="font-mono text-xs uppercase tracking-wide text-textMuted">Waypoints ({waypoints.length})</h3>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon={<Send className="h-3.5 w-3.5" />}
-                  loading={isSending}
-                  disabled={waypoints.length === 0 || eStopActive}
-                  onClick={sendMission}
-                >
-                  {eStopActive ? "E-STOP ACTIVE" : sentSuccess ? "Sent ✓" : "Initiate Navigation"}
-                </Button>
-              </div>
-              {waypoints.length === 0 ? (
-                <p className="font-mono text-xs text-textDim">No waypoints placed yet - click "Place waypoint", then click twice on the map.</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {waypoints.map((wp, i) => (
-                    <li key={i} className="flex items-center justify-between rounded-lg border border-border/40 bg-background/40 px-3 py-1.5">
-                      <span className="font-mono text-xs text-text">
-                        {wp.label} · ({wp.x.toFixed(0)}, {wp.y.toFixed(0)})
-                      </span>
-                      <button onClick={() => removeWaypoint(i)} aria-label={`Remove ${wp.label}`} className="text-textDim hover:text-danger">
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-
-            {maps.length > 1 && (
-              <Card className="p-4">
-                <h3 className="mb-2 font-mono text-xs uppercase tracking-wide text-textMuted">Saved Maps</h3>
-                <div className="flex flex-wrap gap-2">
-                  {maps.map((m) => (
-                    <button
-                      key={m.id}
-                      onClick={() => selectMap(m)}
-                      className={`rounded-full border px-3 py-1 font-mono text-[11px] ${
-                        selectedMap?.id === m.id ? "border-accent bg-accent/10 text-accent" : "border-border text-textMuted hover:text-text"
-                      }`}
-                    >
-                      {m.name}
-                    </button>
-                  ))}
-                </div>
-              </Card>
+            </div>
+            {loading && (
+              <p className="flex-none px-lg pb-sm font-mono text-[11px] text-faint">Loading map…</p>
             )}
-          </div>
+          </Panel>
 
-          {/* Sidebar: scan observation + live telemetry */}
-          <div className="space-y-4">
-            <Card className="p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="font-mono text-xs uppercase tracking-wide text-textMuted">Scan Observation</h3>
+          {maps.length > 1 && (
+            <div className="flex flex-none flex-wrap items-center gap-2">
+              <span className="font-sans text-label uppercase text-muted">
+                Saved maps
+              </span>
+              {maps.map((m) => (
                 <button
-                  onClick={() => setScanUpdateOn((v) => !v)}
-                  className={`rounded-full border px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wide transition-colors ${
-                    scanUpdateOn ? "border-accent bg-accent/10 text-accent" : "border-border text-textDim hover:text-text"
+                  key={m.id}
+                  onClick={() => selectMap(m)}
+                  aria-pressed={selectedMap?.id === m.id}
+                  className={`rounded-pill border px-3 py-1 font-sans text-[11px] font-medium transition-colors ${
+                    selectedMap?.id === m.id
+                      ? "border-coral/40 bg-coral/10 text-coral"
+                      : "border-line text-muted hover:border-faint/60 hover:text-ink"
                   }`}
                 >
-                  Scan Update: {scanUpdateOn ? "ON" : "OFF"}
+                  {m.name}
                 </button>
-              </div>
-              <canvas ref={scanCanvasRef} width={SCAN_CANVAS_SIZE} height={SCAN_CANVAS_SIZE} className="mx-auto rounded-lg" />
-              {scan ? (
-                <dl className="mt-3 grid grid-cols-2 gap-2 font-mono text-[11px] text-textMuted">
-                  <div>
-                    Beams: <span className="text-text">{validBeams.length}/{scan.ranges.length}</span>
-                  </div>
-                  <div>
-                    Frame: <span className="text-text">{scan.frame_id}</span>
-                  </div>
-                  <div>
-                    Closest: <span className="text-text">{closestRange !== null ? `${closestRange.toFixed(2)}m` : "—"}</span>
-                  </div>
-                  <div>
-                    Farthest: <span className="text-text">{farthestRange !== null ? `${farthestRange.toFixed(2)}m` : "—"}</span>
-                  </div>
-                </dl>
-              ) : (
-                <p className="mt-3 text-center font-mono text-[11px] text-textDim">Waiting for /scan data…</p>
-              )}
-            </Card>
-
-            <Card className="space-y-2 p-4">
-              <h3 className="mb-1 font-mono text-xs uppercase tracking-wide text-textMuted">Live Telemetry</h3>
-              <div className="flex items-center gap-2 font-mono text-xs text-textMuted">
-                <Crosshair className="h-3.5 w-3.5 text-accent" />
-                Position: <span className="text-text">{localisation ? `${localisation.x.toFixed(2)}, ${localisation.y.toFixed(2)}` : "no AMCL fix yet"}</span>
-              </div>
-              <div className="font-mono text-xs text-textMuted">
-                Distance remaining: <span className="text-text">{distanceRemaining !== null ? `${distanceRemaining.toFixed(2)}m` : "—"}</span>
-              </div>
-              {eStopActive && <p className="mt-2 font-mono text-[11px] text-rose-400">E-Stop is active - navigation is blocked until it's released.</p>}
-            </Card>
-          </div>
+              ))}
+            </div>
+          )}
         </div>
-      </main>
+
+        {/* ---- Right: the route being built, then what the robot sees ---- */}
+        <div className="flex min-h-0 flex-col gap-lg overflow-y-auto">
+          <Panel
+            className="flex-none"
+            title="Route"
+            action={<span className="font-mono text-[11px] text-faint">{waypoints.length} pts</span>}
+          >
+            {waypoints.length === 0 ? (
+              <EmptyState
+                icon={<MapPin className="h-6 w-6" />}
+                title="No waypoints"
+                description={'Choose "Place waypoint", then click the map twice — once for position, once for heading.'}
+                className="py-lg"
+              />
+            ) : (
+              <ol className="flex flex-col gap-1.5">
+                {waypoints.map((wp, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center justify-between gap-2 rounded-md border border-line bg-raised px-3 py-2"
+                  >
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <span className="flex h-5 w-5 flex-none items-center justify-center rounded-pill bg-coral/15 font-mono text-[11px] text-coral">
+                        {i + 1}
+                      </span>
+                      <span className="truncate font-mono text-caption text-body">
+                        {wp.x.toFixed(0)}, {wp.y.toFixed(0)}
+                      </span>
+                    </span>
+                    <button
+                      onClick={() => removeWaypoint(i)}
+                      aria-label={`Remove ${wp.label}`}
+                      className="flex-none text-faint transition-colors hover:text-fault-bright"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            )}
+
+            {/* Dispatch is the one destructive-ish action on this page, so it
+                gets the full-width primary and states its own blocker. */}
+            <Button
+              variant={eStopActive ? "danger" : "primary"}
+              size="md"
+              icon={<Send className="h-3.5 w-3.5" />}
+              loading={isSending}
+              disabled={waypoints.length === 0 || eStopActive}
+              onClick={sendMission}
+              block
+              className="mt-md"
+            >
+              {eStopActive ? "Blocked — E-Stop active" : sentSuccess ? "Dispatched ✓" : "Dispatch route"}
+            </Button>
+
+            {eStopActive && (
+              <p className="mt-2 font-sans text-caption text-fault-bright">
+                Release the emergency stop before dispatching a route.
+              </p>
+            )}
+          </Panel>
+
+          <Panel
+            className="flex-none"
+            title="Scan"
+            action={
+              <>
+                {/* The tag describes the DATA, the button controls the
+                    subscription — they must not both say "off". */}
+                <SignalTag
+                  state={scan ? "live" : "absent"}
+                  label={scan ? "SCANNING" : scanUpdateOn ? "AWAITING FRAME" : "NO DATA"}
+                />
+                <button
+                  onClick={() => setScanUpdateOn((v) => !v)}
+                  aria-pressed={scanUpdateOn}
+                  className={`rounded-md border px-2.5 py-1 font-sans text-label uppercase transition-colors ${
+                    scanUpdateOn
+                      ? "border-coral/40 bg-coral/10 text-coral"
+                      : "border-line text-faint hover:border-faint/60 hover:text-body"
+                  }`}
+                >
+                  {scanUpdateOn ? "On" : "Off"}
+                </button>
+              </>
+            }
+          >
+            <canvas
+              ref={scanCanvasRef}
+              width={SCAN_CANVAS_SIZE}
+              height={SCAN_CANVAS_SIZE}
+              className="mx-auto rounded-md"
+              role="img"
+              aria-label={scan ? `Lidar scan, ${validBeams.length} returns` : "Lidar scan, no data"}
+            />
+            <dl className="mt-md grid grid-cols-2 gap-x-md gap-y-2">
+              <ScanFact label="Beams" value={scan ? `${validBeams.length}/${scan.ranges.length}` : null} />
+              <ScanFact label="Frame" value={scan ? scan.frame_id : null} />
+              <ScanFact label="Closest" value={closestRange !== null ? `${closestRange.toFixed(2)} m` : null} />
+              <ScanFact label="Farthest" value={farthestRange !== null ? `${farthestRange.toFixed(2)} m` : null} />
+            </dl>
+          </Panel>
+
+          <Panel title="Navigation" className="flex-none">
+            <div className="flex flex-col gap-lg">
+              <Readout
+                label="Position"
+                value={localisation ? `${localisation.x.toFixed(2)}, ${localisation.y.toFixed(2)}` : null}
+                state={localisation ? "live" : "absent"}
+                size="sm"
+                icon={<Crosshair className="h-3.5 w-3.5" />}
+              />
+              <Readout
+                label="Distance remaining"
+                value={distanceRemaining !== null ? distanceRemaining.toFixed(2) : null}
+                unit="m"
+                state={distanceRemaining !== null ? "live" : "absent"}
+                size="sm"
+              />
+            </div>
+          </Panel>
+        </div>
+      </div>
+    </AppShell>
+  );
+}
+
+/** One label/value pair in the scan facts grid. Renders an em-dash, never a
+ *  remembered value, when there is no scan. */
+function ScanFact({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="min-w-0">
+      <dt className="font-sans text-label uppercase text-muted">
+        {label}
+      </dt>
+      <dd className={`truncate font-mono text-caption ${value ? "text-ink" : "text-faint"}`}>
+        {value ?? "—"}
+      </dd>
     </div>
   );
 }

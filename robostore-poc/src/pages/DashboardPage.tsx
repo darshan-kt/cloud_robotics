@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   Activity,
-  Battery,
   Camera,
+  Check,
   Clock,
   Cog,
   Compass,
-  LayoutDashboard,
-  Check,
   Crosshair,
   Pencil,
   Radar,
@@ -16,88 +14,40 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { Header } from "../components/layout/Header";
-import { Card, Badge, Skeleton } from "../components/ui/Layout";
+import { AppShell } from "../components/layout/AppShell";
+import { Chip, EmptyState, KeyValue, Panel, Skeleton, inputClass } from "../components/ui/Layout";
+import { EventLog } from "../components/ui/EventLog";
+import { Readout, SignalTag, type Provenance } from "../components/ui/Signal";
 import { useToast } from "../components/ui/Toast";
-import { GATEWAY_URL } from "../lib/config";
 import { clamp } from "../lib/utils";
 import * as localDb from "../lib/localDb";
-import type { Robot, RobotSensor } from "../types";
+import type { EmergencyStop, Robot, RobotSensor } from "../types";
 import { useScan, type ScanFrame } from "../hooks/useScan";
 import { useTelemetry, type Telemetry } from "../hooks/useTelemetry";
 import { useLocalisation } from "../hooks/useLocalisation";
 import { usePlan } from "../hooks/usePlan";
+import { useGatewayHealth, type GatewayHealth } from "../hooks/useGatewayHealth";
+import { useEmergencyStop } from "../hooks/useEmergencyStop";
 
-// ---- Page-local hook: useGatewayHealth --------------------------------
-// Deliberately NOT shared with other pages (unlike useTelemetry etc.) - it's
-// the only place in the app that measures its own round-trip latency
-// (performance.now() before/after the fetch, since the gateway's /health
-// response carries no timestamp of its own) and keeps a rolling history for
-// the heartbeat sparkline. See the build brief's Dashboard step.
-
-interface GatewayHealth {
-  ok: boolean;
-  robotAlive: boolean;
-  latencyMs: number | null;
-  topics: Record<string, number>;
-  history: number[]; // 1 = poll succeeded, 0 = failed - last 40 kept
-}
-
-function useGatewayHealth(intervalMs = 3000): GatewayHealth {
-  const [state, setState] = useState<GatewayHealth>({
-    ok: false,
-    robotAlive: false,
-    latencyMs: null,
-    topics: {},
-    history: [],
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function poll() {
-      const start = performance.now();
-      try {
-        const res = await fetch(`${GATEWAY_URL}/health`, { signal: AbortSignal.timeout(3000) });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const body = await res.json();
-        const elapsed = performance.now() - start;
-        if (cancelled) return;
-        setState((s) => ({
-          ok: true,
-          robotAlive: !!body.robot_alive,
-          latencyMs: elapsed,
-          topics: body.topics ?? {},
-          history: [...s.history, 1].slice(-40),
-        }));
-      } catch {
-        if (cancelled) return;
-        setState((s) => ({
-          ok: false,
-          robotAlive: false,
-          latencyMs: null,
-          topics: {},
-          history: [...s.history, 0].slice(-40),
-        }));
-      }
-    }
-
-    poll();
-    const interval = window.setInterval(poll, intervalMs);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [intervalMs]);
-
-  return state;
-}
+// The dashboard's central honesty problem, now fixed:
+//
+// It rendered a live strip reading "ROBOT OFFLINE · GATEWAY DOWN" directly
+// above four metric cards reading "STATUS ONLINE · BATTERY 78% · UPTIME
+// 132.5h" — the first row streamed from the gateway, the second came from an
+// IndexedDB seed written months ago, and both were styled identically. An
+// operator had no way to tell which half of the screen was describing the
+// robot in front of them.
+//
+// Every value on this page now carries its provenance (see ui/Signal.tsx).
+// Gateway-derived figures read LIVE; IndexedDB-derived figures read CACHED
+// with an age; anything with no source renders an em-dash instead of the
+// last number it happened to remember.
 
 // ---- HeartbeatSpark: a hand-drawn ECG-style SVG, not a charting library ---
 
 function HeartbeatSpark({ history }: { history: number[] }) {
-  const width = 160;
-  const height = 28;
+  const width = 132;
+  const height = 24;
   const mid = height / 2;
   const samples = history.slice(-20);
   const n = Math.max(samples.length, 1);
@@ -116,74 +66,105 @@ function HeartbeatSpark({ history }: { history: number[] }) {
   });
 
   const latest = samples[samples.length - 1];
-  const stroke = latest === 1 ? "#34d399" : "#f43f5e";
+  const stroke = latest === 1 ? "stroke-nominal" : "stroke-fault";
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} className="hidden lg:block">
-      <path d={d} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      width={width}
+      height={height}
+      className="hidden lg:block"
+      role="img"
+      aria-label={latest === 1 ? "Gateway link healthy" : "Gateway link down"}
+    >
+      <path
+        d={d}
+        fill="none"
+        className={stroke}
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
     </svg>
-  );
-}
-
-// ---- LiveStat: one dot+label+value in the status strip ---------------
-
-type Tone = "emerald" | "amber" | "rose" | "blue" | "muted";
-
-const TONE_DOT: Record<Tone, string> = {
-  emerald: "bg-emerald-400",
-  amber: "bg-amber-400",
-  rose: "bg-rose-400",
-  blue: "bg-blue-400",
-  muted: "bg-textDim",
-};
-
-function LiveStat({ label, value, tone }: { label: string; value: string; tone: Tone }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[tone]} animate-pulse-status`} />
-      <span className="font-mono text-[10px] uppercase tracking-wide text-textDim">{label}</span>
-      <span className="font-mono text-xs text-text">{value}</span>
-    </div>
   );
 }
 
 // ---- Shared small pieces ------------------------------------------------
 
-function SpecRow({ label, value }: { label: string; value: string }) {
+/** A compact metric tile used inside tabs. */
+function Tile({
+  label,
+  value,
+  unit,
+  state = "cached",
+  age,
+  tone = "default",
+  icon,
+}: {
+  label: string;
+  value: ReactNode;
+  unit?: string;
+  state?: Provenance;
+  age?: number | null;
+  tone?: "default" | "nominal" | "caution" | "fault";
+  icon?: ReactNode;
+}) {
   return (
-    <div className="flex items-center justify-between border-b border-border/30 pb-2 last:border-b-0 last:pb-0">
-      <dt className="font-mono text-xs text-textDim">{label}</dt>
-      <dd className="font-mono text-xs text-text">{value}</dd>
+    <div className="shadow-panel rounded-lg border border-line bg-surface p-md">
+      <Readout
+        label={label}
+        value={value}
+        unit={unit}
+        state={state}
+        age={age}
+        tone={tone}
+        size="sm"
+        icon={icon}
+      />
     </div>
   );
 }
 
-function SummaryTile({ label, value }: { label: string; value: string }) {
+/** A labelled 0–100 bar. Colour is semantic: over 80 is a fault, over 60 caution. */
+function Meter({ label, value, display }: { label: string; value: number; display: string }) {
+  const tone = value > 80 ? "bg-fault" : value > 60 ? "bg-caution" : "bg-nominal";
   return (
-    <Card className="p-4">
-      <p className="font-mono text-[10px] uppercase tracking-wide text-textDim">{label}</p>
-      <p className="mt-1 font-mono text-lg font-semibold text-text">{value}</p>
-    </Card>
+    <div>
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <span className="font-sans text-caption text-muted">{label}</span>
+        <span className="font-mono text-caption text-body">{display}</span>
+      </div>
+      <div
+        className="h-1 overflow-hidden rounded-pill bg-elevated"
+        role="meter"
+        aria-valuenow={Math.round(value)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={label}
+      >
+        <div className={`h-full rounded-pill transition-[width] duration-500 ${tone}`} style={{ width: `${value}%` }} />
+      </div>
+    </div>
   );
 }
 
 // ---- Robot Info tab ------------------------------------------------
 
 function BatteryRing({ level }: { level: number }) {
-  const radius = 24;
+  const radius = 20;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference * (1 - clamp(level, 0, 100) / 100);
-  const color = level > 50 ? "#34d399" : level > 20 ? "#ffb020" : "#ff4d6a";
+  const color = level > 50 ? "stroke-nominal" : level > 20 ? "stroke-caution" : "stroke-fault";
   return (
-    <svg width={60} height={60} className="-rotate-90">
-      <circle cx={30} cy={30} r={radius} fill="none" stroke="#2b4d58" strokeWidth={6} />
+    <svg width={52} height={52} className="-rotate-90" aria-hidden>
+      <circle cx={26} cy={26} r={radius} fill="none" className="stroke-elevated" strokeWidth={4} />
       <circle
-        cx={30}
-        cy={30}
+        cx={26}
+        cy={26}
         r={radius}
         fill="none"
-        stroke={color}
-        strokeWidth={6}
+        className={`${color} transition-[stroke-dashoffset] duration-500`}
+        strokeWidth={4}
         strokeDasharray={circumference}
         strokeDashoffset={offset}
         strokeLinecap="round"
@@ -192,54 +173,79 @@ function BatteryRing({ level }: { level: number }) {
   );
 }
 
-function MetricCard({
-  icon: Icon,
-  label,
-  value,
-  ring,
+function RobotInfoTab({
+  robot,
+  cachedAt,
+  events,
 }: {
-  icon: LucideIcon;
-  label: string;
-  value: string;
-  ring?: number;
+  robot: Robot;
+  cachedAt: number | null;
+  events: EmergencyStop[];
 }) {
   return (
-    <Card className="flex items-center gap-3 p-4">
-      {ring !== undefined ? (
-        <BatteryRing level={ring} />
-      ) : (
-        <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-white/5">
-          <Icon className="h-5 w-5 text-text" />
+    <div className="flex flex-col gap-lg">
+      {/* These four are IndexedDB values, not gateway values, and they say so. */}
+      <div className="grid grid-cols-1 gap-md min-[420px]:grid-cols-2 lg:grid-cols-4">
+        <Tile
+          label="Reported status"
+          value={robot.status}
+          state="cached"
+          age={cachedAt}
+          tone={robot.status === "online" ? "nominal" : robot.status === "error" ? "fault" : "default"}
+          icon={<Activity className="h-3.5 w-3.5" />}
+        />
+        <div className="shadow-panel flex items-center gap-md rounded-lg border border-line bg-surface p-md">
+          <BatteryRing level={robot.battery_level} />
+          <Readout
+            label="Battery"
+            value={robot.battery_level}
+            unit="%"
+            state="cached"
+            age={cachedAt}
+            size="sm"
+            tone={robot.battery_level < 20 ? "caution" : "default"}
+          />
         </div>
-      )}
-      <div className="min-w-0">
-        <p className="font-mono text-[10px] uppercase tracking-wide text-textDim">{label}</p>
-        <p className="truncate font-mono text-sm font-semibold text-text">{value}</p>
+        <Tile
+          label="Uptime"
+          value={robot.uptime_hours.toFixed(1)}
+          unit="h"
+          state="cached"
+          age={cachedAt}
+          icon={<Clock className="h-3.5 w-3.5" />}
+        />
+        <Tile
+          label="Address"
+          value={robot.ip_address}
+          state="cached"
+          age={cachedAt}
+          icon={<Wifi className="h-3.5 w-3.5" />}
+        />
       </div>
-    </Card>
-  );
-}
 
-function RobotInfoTab({ robot }: { robot: Robot }) {
-  return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <MetricCard icon={Activity} label="Status" value={robot.status.toUpperCase()} />
-        <MetricCard icon={Battery} label="Battery" value={`${robot.battery_level}%`} ring={robot.battery_level} />
-        <MetricCard icon={Clock} label="Uptime" value={`${robot.uptime_hours.toFixed(1)}h`} />
-        <MetricCard icon={Wifi} label="Comm" value={robot.ip_address} />
+      <div className="grid grid-cols-1 gap-lg lg:grid-cols-[1fr_380px]">
+        <Panel title="Hardware specification">
+          <dl>
+            <KeyValue label="Name" value={robot.name} mono={false} />
+            <KeyValue label="Model" value={robot.model} />
+            <KeyValue label="Serial" value={robot.serial_number} />
+            <KeyValue label="Firmware" value={robot.firmware_version} />
+            <KeyValue label="IP address" value={robot.ip_address} />
+            <KeyValue label="Last mission" value={robot.last_mission ?? "—"} mono={false} />
+          </dl>
+        </Panel>
+
+        <Panel
+          title="Safety events"
+          action={<span className="font-mono text-[11px] text-faint">{events.length}</span>}
+        >
+          <EventLog
+            events={events}
+            limit={5}
+            emptyDescription="No emergency stop has been triggered on this robot."
+          />
+        </Panel>
       </div>
-      <Card className="p-5">
-        <h3 className="mb-4 font-mono text-xs uppercase tracking-wide text-textMuted">Hardware Specification</h3>
-        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <SpecRow label="Name" value={robot.name} />
-          <SpecRow label="Model" value={robot.model} />
-          <SpecRow label="Serial" value={robot.serial_number} />
-          <SpecRow label="Firmware" value={robot.firmware_version} />
-          <SpecRow label="IP Address" value={robot.ip_address} />
-          <SpecRow label="Last Mission" value={robot.last_mission ?? "—"} />
-        </dl>
-      </Card>
     </div>
   );
 }
@@ -259,7 +265,11 @@ function sensorIcon(name: string): LucideIcon {
 /** LIDAR/encoder cards get a live one-line readout, matched by regex against
  * the sensor's own `name` - the app has no per-sensor data contract, so this
  * is how "hardware" cards borrow from the real-time streams. */
-function sensorLiveSummary(sensor: RobotSensor, scan: ScanFrame | null, robotState: Telemetry | null): string | null {
+function sensorLiveSummary(
+  sensor: RobotSensor,
+  scan: ScanFrame | null,
+  robotState: Telemetry | null,
+): string | null {
   if (/lidar/i.test(sensor.name) && scan) {
     const valid = scan.ranges.filter((r) => r !== null).length;
     return `${valid}/${scan.ranges.length} beams · frame ${scan.frame_id}`;
@@ -281,41 +291,35 @@ function SensorCard({
 }) {
   const Icon = sensorIcon(sensor.name);
   const tempPct = sensor.temperature !== null ? clamp((sensor.temperature / 70) * 100, 0, 100) : null;
-  const tempColor =
-    sensor.temperature === null
-      ? ""
-      : sensor.temperature >= 50
-        ? "bg-rose-500"
-        : sensor.temperature >= 40
-          ? "bg-amber-500"
-          : "bg-emerald-500";
-  const badgeTheme = sensor.status === "live" ? "emerald" : sensor.status === "software" ? "blue" : "muted";
+  const tone = sensor.status === "live" ? "nominal" : sensor.status === "software" ? "brand" : "caution";
 
   return (
-    <Card className="p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-accent" />
-          <span className="font-mono text-sm text-text">{sensor.name}</span>
+    <div className="shadow-panel flex flex-col rounded-lg border border-line bg-surface p-md">
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Icon className="h-4 w-4 flex-none text-faint" />
+          <span className="truncate font-sans text-title-sm text-ink">{sensor.name}</span>
         </div>
-        <Badge theme={badgeTheme}>{software ? "software" : sensor.status}</Badge>
+        <Chip tone={tone}>{software ? "software" : sensor.status}</Chip>
       </div>
-      <p className="mb-1 font-mono text-[11px] text-textDim">
+
+      <p className="font-mono text-[11px] text-faint">
         {sensor.model} · {sensor.frequency}
       </p>
-      {liveSummary && <p className="mb-2 font-mono text-[11px] text-accent">{liveSummary}</p>}
+
+      {liveSummary && (
+        <p className="mt-2 flex items-center gap-1.5 font-mono text-[11px] text-nominal">
+          <span className="h-1 w-1 flex-none animate-breathe rounded-pill bg-nominal" />
+          {liveSummary}
+        </p>
+      )}
+
       {tempPct !== null && (
-        <div className="mt-2">
-          <div className="mb-1 flex justify-between font-mono text-[10px] text-textDim">
-            <span>TEMP</span>
-            <span>{sensor.temperature}°C</span>
-          </div>
-          <div className="h-1.5 rounded-full bg-card">
-            <div className={`h-1.5 rounded-full ${tempColor}`} style={{ width: `${tempPct}%` }} />
-          </div>
+        <div className="mt-md">
+          <Meter label="Temperature" value={tempPct} display={`${sensor.temperature}°C`} />
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -324,11 +328,13 @@ function SensorsTab({
   scan,
   robotState,
   localisation,
+  cachedAt,
 }: {
   sensors: RobotSensor[];
   scan: ScanFrame | null;
   robotState: Telemetry | null;
   localisation: unknown;
+  cachedAt: number | null;
 }) {
   const virtualAmcl: RobotSensor = {
     id: "virt-amcl",
@@ -348,14 +354,36 @@ function SensorsTab({
   const validBeams = scan ? scan.ranges.filter((r) => r !== null).length : 0;
 
   return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <SummaryTile label="Modules Online" value={`${activeCount}/${allSensors.length}`} />
-        <SummaryTile label="Live Data Feeds" value={String(liveFeedCount)} />
-        <SummaryTile label="Avg Module Temp" value={avgTemp !== null ? `${avgTemp.toFixed(1)}°C` : "—"} />
-        <SummaryTile label="LIDAR Beams" value={scan ? `${validBeams}/${scan.ranges.length}` : "—"} />
+    <div className="flex flex-col gap-lg">
+      <div className="grid grid-cols-1 gap-md min-[420px]:grid-cols-2 lg:grid-cols-4">
+        <Tile
+          label="Modules online"
+          value={`${activeCount}/${allSensors.length}`}
+          state="cached"
+          age={cachedAt}
+          tone={activeCount < allSensors.length ? "caution" : "nominal"}
+        />
+        <Tile
+          label="Live data feeds"
+          value={liveFeedCount}
+          state={liveFeedCount > 0 ? "live" : "absent"}
+          tone={liveFeedCount > 0 ? "nominal" : "default"}
+        />
+        <Tile
+          label="Avg module temp"
+          value={avgTemp !== null ? avgTemp.toFixed(1) : null}
+          unit="°C"
+          state="cached"
+          age={cachedAt}
+        />
+        <Tile
+          label="Lidar beams"
+          value={scan ? `${validBeams}/${scan.ranges.length}` : null}
+          state={scan ? "live" : "absent"}
+        />
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+
+      <div className="grid grid-cols-1 gap-md sm:grid-cols-2 xl:grid-cols-3">
         {allSensors.map((sensor) => (
           <SensorCard
             key={sensor.id}
@@ -372,17 +400,17 @@ function SensorsTab({
 // ---- Configuration tab ------------------------------------------------
 
 const NUMERIC_PARAMS = [
-  { key: "max_speed", label: "Max Speed", min: 0, max: 3, unit: "m/s" },
-  { key: "max_linear_speed", label: "Max Linear Speed", min: 0.1, max: 0.8, unit: "m/s" },
-  { key: "max_turn_rate", label: "Max Turn Rate", min: 0.1, max: 1.0, unit: "rad/s" },
-  { key: "obstacle_distance", label: "Obstacle Distance", min: 0, max: 2, unit: "m" },
+  { key: "max_speed", label: "Max speed", min: 0, max: 3, unit: "m/s" },
+  { key: "max_linear_speed", label: "Max linear speed", min: 0.1, max: 0.8, unit: "m/s" },
+  { key: "max_turn_rate", label: "Max turn rate", min: 0.1, max: 1.0, unit: "rad/s" },
+  { key: "obstacle_distance", label: "Obstacle distance", min: 0, max: 2, unit: "m" },
 ] as const;
 
 const TEXT_PARAMS = [
-  { key: "navigation_mode", label: "Navigation Mode" },
-  { key: "localization_method", label: "Localization Method" },
-  { key: "path_planner", label: "Path Planner" },
-  { key: "recovery_behavior", label: "Recovery Behavior" },
+  { key: "navigation_mode", label: "Navigation mode" },
+  { key: "localization_method", label: "Localization method" },
+  { key: "path_planner", label: "Path planner" },
+  { key: "recovery_behavior", label: "Recovery behavior" },
 ] as const;
 
 type ConfigKey = (typeof NUMERIC_PARAMS)[number]["key"] | (typeof TEXT_PARAMS)[number]["key"];
@@ -396,7 +424,15 @@ interface EditControls {
   onCancel: () => void;
 }
 
-function EditRow({ label, editing, editValue, onChangeValue, onSave, onCancel, children }: {
+function EditRow({
+  label,
+  editing,
+  editValue,
+  onChangeValue,
+  onSave,
+  onCancel,
+  children,
+}: {
   label: string;
   editing: boolean;
   editValue: string;
@@ -406,11 +442,11 @@ function EditRow({ label, editing, editValue, onChangeValue, onSave, onCancel, c
   children: ReactNode;
 }) {
   return (
-    <div className="group/param">
-      <div className="mb-1 flex items-center justify-between">
-        <span className="font-mono text-xs text-textMuted">{label}</span>
+    <div className="group/param border-b border-line-soft py-sm last:border-0">
+      <div className="flex min-h-[28px] items-center justify-between gap-md">
+        <span className="font-sans text-body-sm text-muted">{label}</span>
         {editing ? (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <input
               autoFocus
               value={editValue}
@@ -419,13 +455,22 @@ function EditRow({ label, editing, editValue, onChangeValue, onSave, onCancel, c
                 if (e.key === "Enter") onSave();
                 if (e.key === "Escape") onCancel();
               }}
-              className="w-24 rounded border border-accent bg-background px-1.5 py-0.5 font-mono text-xs text-text focus:outline-none"
+              aria-label={`New value for ${label}`}
+              className={`${inputClass} h-8 w-32 border-coral font-mono`}
             />
-            <button onClick={onSave} aria-label={`Save ${label}`} className="text-emerald-400 hover:text-emerald-300">
-              <Check className="h-3.5 w-3.5" />
+            <button
+              onClick={onSave}
+              aria-label={`Save ${label}`}
+              className="text-nominal transition-colors hover:text-ink"
+            >
+              <Check className="h-4 w-4" />
             </button>
-            <button onClick={onCancel} aria-label={`Cancel editing ${label}`} className="text-textDim hover:text-text">
-              <X className="h-3.5 w-3.5" />
+            <button
+              onClick={onCancel}
+              aria-label={`Cancel editing ${label}`}
+              className="text-faint transition-colors hover:text-ink"
+            >
+              <X className="h-4 w-4" />
             </button>
           </div>
         ) : (
@@ -464,23 +509,23 @@ function NumericParamRow({
       onSave={() => controls.onSave(paramKey)}
       onCancel={controls.onCancel}
     >
-      <div className="flex items-center gap-1.5">
-        <span className="font-mono text-xs text-text">
-          {value} {unit}
+      <div className="flex items-center gap-md">
+        {/* The bar sits inline with the value rather than on its own row, so
+            the rows stay a fixed height and the column reads as a table. */}
+        <div className="hidden h-1 w-24 overflow-hidden rounded-pill bg-elevated sm:block">
+          <div className="h-full rounded-pill bg-coral" style={{ width: `${pct}%` }} />
+        </div>
+        <span className="font-mono text-body-sm text-ink">
+          {value} <span className="text-faint">{unit}</span>
         </span>
         <button
           onClick={() => controls.onStartEdit(paramKey, String(value))}
           aria-label={`Edit ${label}`}
-          className="text-textDim opacity-0 transition-opacity hover:text-accent group-hover/param:opacity-100"
+          className="text-faint opacity-0 transition-opacity hover:text-coral focus-visible:opacity-100 group-hover/param:opacity-100"
         >
-          <Pencil className="h-3 w-3" />
+          <Pencil className="h-3.5 w-3.5" />
         </button>
       </div>
-      {!editing && (
-        <div className="mt-1 h-1.5 rounded-full bg-card">
-          <div className="h-1.5 rounded-full bg-accent" style={{ width: `${pct}%` }} />
-        </div>
-      )}
     </EditRow>
   );
 }
@@ -505,14 +550,14 @@ function TextParamRow({
       onSave={() => controls.onSave(paramKey)}
       onCancel={controls.onCancel}
     >
-      <div className="flex items-center gap-1.5">
-        <Badge theme="blue">{value}</Badge>
+      <div className="flex items-center gap-md">
+        <span className="font-mono text-body-sm text-ink">{value}</span>
         <button
           onClick={() => controls.onStartEdit(paramKey, value)}
           aria-label={`Edit ${label}`}
-          className="text-textDim opacity-0 transition-opacity hover:text-accent group-hover/param:opacity-100"
+          className="text-faint opacity-0 transition-opacity hover:text-coral focus-visible:opacity-100 group-hover/param:opacity-100"
         >
-          <Pencil className="h-3 w-3" />
+          <Pencil className="h-3.5 w-3.5" />
         </button>
       </div>
     </EditRow>
@@ -521,9 +566,11 @@ function TextParamRow({
 
 function ConfigurationTab({ robot, controls }: { robot: Robot; controls: EditControls }) {
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-      <Card className="space-y-4 p-5">
-        <h3 className="font-mono text-xs uppercase tracking-wide text-textMuted">Motion &amp; Safety Limits</h3>
+    <div className="grid grid-cols-1 gap-lg lg:grid-cols-2">
+      <Panel
+        title="Motion & safety limits"
+        action={<Chip tone="caution">Affects driving</Chip>}
+      >
         {NUMERIC_PARAMS.map((p) => (
           <NumericParamRow
             key={p.key}
@@ -536,13 +583,18 @@ function ConfigurationTab({ robot, controls }: { robot: Robot; controls: EditCon
             controls={controls}
           />
         ))}
-      </Card>
-      <Card className="space-y-4 p-5">
-        <h3 className="font-mono text-xs uppercase tracking-wide text-textMuted">Navigation Stack</h3>
+      </Panel>
+      <Panel title="Navigation stack">
         {TEXT_PARAMS.map((p) => (
-          <TextParamRow key={p.key} label={p.label} paramKey={p.key} value={robot[p.key]} controls={controls} />
+          <TextParamRow
+            key={p.key}
+            label={p.label}
+            paramKey={p.key}
+            value={robot[p.key]}
+            controls={controls}
+          />
         ))}
-      </Card>
+      </Panel>
     </div>
   );
 }
@@ -557,14 +609,11 @@ const TOPICS = [
 ] as const;
 
 function TopicRow({ name, thresholdS, ageS }: { name: string; thresholdS: number; ageS: number | null }) {
-  const fresh = ageS !== null && ageS < thresholdS;
+  const state: Provenance = ageS === null ? "absent" : ageS < thresholdS ? "live" : "stale";
   return (
-    <div className="flex items-center justify-between border-b border-border/30 py-1.5 last:border-b-0">
-      <div className="flex items-center gap-2">
-        <span className={`h-1.5 w-1.5 rounded-full ${fresh ? "animate-pulse-status bg-emerald-400" : "bg-amber-400"}`} />
-        <span className="font-mono text-xs text-text">{name}</span>
-      </div>
-      <span className="font-mono text-[11px] text-textDim">{ageS !== null ? `${ageS.toFixed(1)}s ago` : "SILENT"}</span>
+    <div className="flex items-center justify-between gap-md border-b border-line-soft py-2 last:border-0">
+      <span className="truncate font-mono text-body-sm text-body">{name}</span>
+      <SignalTag state={state} label={ageS !== null ? `${ageS.toFixed(1)}S AGO` : "SILENT"} />
     </div>
   );
 }
@@ -581,18 +630,7 @@ function Gauge({ label, seed }: { label: string; seed: number }) {
     }, 2500);
     return () => window.clearInterval(interval);
   }, []);
-  const color = value > 80 ? "#ff4d6a" : value > 60 ? "#ffb020" : "#00e5a0";
-  return (
-    <div>
-      <div className="mb-1 flex justify-between font-mono text-[10px] text-textDim">
-        <span>{label}</span>
-        <span>{value.toFixed(0)}%</span>
-      </div>
-      <div className="h-1.5 rounded-full bg-card">
-        <div className="h-1.5 rounded-full transition-[width]" style={{ width: `${value}%`, background: color }} />
-      </div>
-    </div>
-  );
+  return <Meter label={label} value={value} display={`${value.toFixed(0)}%`} />;
 }
 
 const ENVIRONMENT_DETAILS: Array<[string, string]> = [
@@ -607,38 +645,56 @@ const ENVIRONMENT_DETAILS: Array<[string, string]> = [
 
 function SystemTab({ health }: { health: GatewayHealth }) {
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-      <Card className="p-5">
-        <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-textMuted">ROS 2 Runtime — Live</h3>
-        <div className="mb-4">
+    <div className="grid grid-cols-1 gap-lg lg:grid-cols-2">
+      <Panel
+        title="ROS 2 runtime"
+        action={<SignalTag state={health.ok ? "live" : "absent"} age={health.lastOkAt} />}
+      >
+        <div className="mb-lg">
           {TOPICS.map((t) => (
-            <TopicRow key={t.name} name={t.name} thresholdS={t.thresholdS} ageS={health.topics[t.name] ?? null} />
+            <TopicRow
+              key={t.name}
+              name={t.name}
+              thresholdS={t.thresholdS}
+              ageS={health.topics[t.name] ?? null}
+            />
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <SummaryTile label="Gateway RTT" value={health.latencyMs !== null ? `${Math.round(health.latencyMs)}ms` : "—"} />
-          <SummaryTile label="Health Polls" value={String(health.history.length)} />
+        <div className="grid grid-cols-2 gap-md">
+          <Tile
+            label="Gateway RTT"
+            value={health.latencyMs !== null ? Math.round(health.latencyMs) : null}
+            unit="ms"
+            state={health.ok ? "live" : "absent"}
+          />
+          <Tile
+            label="Health polls"
+            value={health.history.length}
+            state={health.probed ? "live" : "absent"}
+          />
         </div>
-      </Card>
-      <div className="space-y-5">
-        <Card className="space-y-3 p-5">
-          <div className="flex items-center justify-between">
-            <h3 className="font-mono text-xs uppercase tracking-wide text-textMuted">Compute Resources</h3>
-            <span className="font-mono text-[10px] text-textDim">simulated</span>
+      </Panel>
+
+      <div className="flex flex-col gap-lg">
+        <Panel
+          title="Compute resources"
+          action={<Chip tone="caution">Simulated</Chip>}
+        >
+          <div className="flex flex-col gap-md">
+            <Gauge label="CPU" seed={62} />
+            <Gauge label="Memory" seed={45} />
+            <Gauge label="vRAM" seed={34} />
+            <Gauge label="NVMe" seed={28} />
           </div>
-          <Gauge label="CPU" seed={62} />
-          <Gauge label="Memory" seed={45} />
-          <Gauge label="vRAM" seed={34} />
-          <Gauge label="NVMe" seed={28} />
-        </Card>
-        <Card className="p-5">
-          <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-textMuted">Environment Details</h3>
-          <dl className="space-y-2">
+        </Panel>
+
+        <Panel title="Environment">
+          <dl>
             {ENVIRONMENT_DETAILS.map(([k, v]) => (
-              <SpecRow key={k} label={k} value={v} />
+              <KeyValue key={k} label={k} value={v} />
             ))}
           </dl>
-        </Card>
+        </Panel>
       </div>
     </div>
   );
@@ -646,12 +702,12 @@ function SystemTab({ health }: { health: GatewayHealth }) {
 
 // ---- Page ------------------------------------------------
 
-const TABS = ["Robot Info", "Sensors", "Configuration", "System"] as const;
+const TABS = ["Robot", "Sensors", "Configuration", "System"] as const;
 type TabName = (typeof TABS)[number];
 
 export function DashboardPage() {
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState<TabName>("Robot Info");
+  const [activeTab, setActiveTab] = useState<TabName>("Robot");
   const [robot, setRobot] = useState<Robot | null>(null);
   const [sensors, setSensors] = useState<RobotSensor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -660,6 +716,7 @@ export function DashboardPage() {
   const [editValue, setEditValue] = useState("");
 
   const health = useGatewayHealth(3000);
+  const { history: estopHistory } = useEmergencyStop();
   const { scan } = useScan(true); // always-on here - only used for a beam-count stat, not a rendered HUD
   const { telemetry } = useTelemetry();
   const { localisation } = useLocalisation();
@@ -743,65 +800,111 @@ export function DashboardPage() {
   };
 
   const missionActive = !!(plan && plan.points.length > 0);
+  const cachedAt = robot ? Date.parse(robot.updated_at) : null;
 
   return (
-    <div className="min-h-screen">
-      <Header showBack title="Dashboard" icon={LayoutDashboard} iconColor="text-emerald-400" />
-
-      <main className="mx-auto max-w-6xl space-y-5 px-4 py-6">
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/50 bg-surface/60 px-4 py-2.5">
-          <div className="flex flex-wrap items-center gap-5">
-            <LiveStat label="ROBOT" value={health.robotAlive ? "ALIVE" : "OFFLINE"} tone={health.robotAlive ? "emerald" : "rose"} />
-            <LiveStat
-              label="GATEWAY"
-              value={health.latencyMs !== null ? `${Math.round(health.latencyMs)}ms` : "DOWN"}
-              tone={health.latencyMs === null ? "rose" : health.latencyMs < 100 ? "emerald" : "amber"}
+    <AppShell title="Dashboard" toolbar={<HeartbeatSpark history={health.history} />}>
+      <div className="mx-auto flex max-w-[1200px] flex-col gap-lg">
+        {/* ---- Live strip. Everything here streams from the gateway; the
+                tab content below is explicitly labelled by its own source. */}
+        <div className="shadow-panel grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line lg:grid-cols-4">
+          <div className="bg-surface px-md py-sm">
+            <Readout
+              label="Robot"
+              value={health.robotAlive ? "alive" : null}
+              state={health.robotAlive ? "live" : "absent"}
+              tone={health.robotAlive ? "nominal" : "default"}
+              size="sm"
             />
-            <LiveStat
-              label="POSE"
-              value={localisation ? `${localisation.x.toFixed(2)}, ${localisation.y.toFixed(2)}` : "—"}
-              tone={localisation ? "blue" : "muted"}
-            />
-            <LiveStat label="MISSION" value={missionActive ? `ACTIVE · ${plan!.points.length} pts` : "IDLE"} tone={missionActive ? "emerald" : "muted"} />
           </div>
-          <HeartbeatSpark history={health.history} />
+          <div className="bg-surface px-md py-sm">
+            <Readout
+              label="Gateway"
+              value={health.latencyMs !== null ? Math.round(health.latencyMs) : null}
+              unit="ms"
+              state={health.ok ? "live" : "absent"}
+              age={health.lastOkAt}
+              tone={health.latencyMs !== null && health.latencyMs > 100 ? "caution" : "nominal"}
+              size="sm"
+            />
+          </div>
+          <div className="bg-surface px-md py-sm">
+            <Readout
+              label="Pose"
+              value={localisation ? `${localisation.x.toFixed(2)}, ${localisation.y.toFixed(2)}` : null}
+              state={localisation ? "live" : "absent"}
+              size="sm"
+            />
+          </div>
+          <div className="bg-surface px-md py-sm">
+            <Readout
+              label="Mission"
+              value={missionActive ? `${plan!.points.length} pts` : null}
+              state={missionActive ? "live" : "absent"}
+              tone={missionActive ? "nominal" : "default"}
+              size="sm"
+            />
+          </div>
         </div>
 
-        <div className="flex gap-1 overflow-x-auto rounded-xl border border-border/50 bg-surface/60 p-1">
-          {TABS.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`whitespace-nowrap rounded-lg px-3.5 py-1.5 font-mono text-xs transition-colors ${
-                activeTab === tab ? "bg-accent text-background" : "text-textMuted hover:bg-card hover:text-text"
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
+        {/* ---- Tabs. DESIGN.md category-tab / category-tab-active. */}
+        <div role="tablist" aria-label="Dashboard sections" className="flex gap-1 overflow-x-auto border-b border-line">
+          {TABS.map((tab) => {
+            const selected = activeTab === tab;
+            return (
+              <button
+                key={tab}
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setActiveTab(tab)}
+                className={[
+                  "-mb-px whitespace-nowrap border-b-2 px-3.5 py-2 font-sans text-nav transition-colors",
+                  selected
+                    ? "border-coral text-ink"
+                    : "border-transparent text-muted hover:border-line hover:text-body",
+                ].join(" ")}
+              >
+                {tab}
+              </button>
+            );
+          })}
         </div>
 
         {loading && (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="grid grid-cols-1 gap-md min-[420px]:grid-cols-2 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-20" />
+              <Skeleton key={i} className="h-24" />
             ))}
           </div>
         )}
 
-        {!loading && error && <p className="text-sm text-danger">{error}</p>}
+        {!loading && error && (
+          <EmptyState
+            icon={<X className="h-7 w-7" />}
+            title="Could not load robot data"
+            description={error}
+          />
+        )}
 
         {!loading && !error && robot && (
-          <>
-            {activeTab === "Robot Info" && <RobotInfoTab robot={robot} />}
+          <div key={activeTab} className="animate-fade-in">
+            {activeTab === "Robot" && (
+              <RobotInfoTab robot={robot} cachedAt={cachedAt} events={estopHistory} />
+            )}
             {activeTab === "Sensors" && (
-              <SensorsTab sensors={sensors} scan={scan} robotState={telemetry} localisation={localisation} />
+              <SensorsTab
+                sensors={sensors}
+                scan={scan}
+                robotState={telemetry}
+                localisation={localisation}
+                cachedAt={cachedAt}
+              />
             )}
             {activeTab === "Configuration" && <ConfigurationTab robot={robot} controls={controls} />}
             {activeTab === "System" && <SystemTab health={health} />}
-          </>
+          </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

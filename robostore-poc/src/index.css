@@ -2,9 +2,175 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------------
+ * Theme tokens.
+ *
+ * Every colour in tailwind.config.ts resolves to one of these variables, as a
+ * bare "R G B" triplet rather than a hex string. That form is what lets
+ * Tailwind's opacity modifiers keep working — `bg-coral/10` compiles to
+ * `rgb(var(--c-coral) / 0.1)`, and there are 70 such usages in this codebase.
+ * Storing a hex here would break every one of them.
+ *
+ * Contrast is measured, not assumed. Each theme's body/muted/faint/coral and
+ * the three semantic colours clear 4.5:1 against the LIGHTEST surface they can
+ * land on (`elevated`, not `canvas`) — the same rule the original dark ramp
+ * was built to, for the same reason: a near miss is invisible to the eye and
+ * obvious to a meter.
+ * ------------------------------------------------------------------------- */
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --c-canvas: 16 15 13;
+  --c-surface: 24 23 21;
+  --c-raised: 31 30 27;
+  --c-elevated: 37 35 32;
+  --c-line: 43 41 37;
+  --c-line-soft: 33 31 28;
+
+  --c-ink: 250 249 245;
+  --c-body: 212 208 200;
+  --c-muted: 160 157 150;
+  --c-faint: 144 141 134;
+
+  --c-coral: 204 120 92;
+  --c-coral-active: 169 88 62;
+  --c-on-coral: 20 20 19;
+
+  --c-nominal: 93 184 166;
+  --c-caution: 232 165 90;
+  --c-warning: 212 160 23;
+  --c-fault: 198 69 69;
+  --c-fault-bright: 224 90 90;
+  --c-success: 93 184 114;
+
+  /* Depth. On a dark ramp the light comes from above as a 1px white inset;
+     shadows are warm (canvas hue) rather than neutral black. */
+  --c-shadow: 8 6 4;
+  --c-lit: 250 249 245;
+  --a-lit: 0.04;
+  --a-sh-soft: 0.28;
+  --a-sh-mid: 0.35;
+  --a-sh-deep: 0.7;
+  --a-sh-raise: 0.8;
+
+  /* The static background wash. */
+  --wash-a: 204 120 92;
+  --wash-a-alpha: 0.07;
+  --wash-b: 93 184 166;
+  --wash-b-alpha: 0.05;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --c-canvas: 244 240 232;
+  --c-surface: 253 252 249;
+  --c-raised: 248 244 237;
+  --c-elevated: 239 233 222;
+  --c-line: 222 213 198;
+  --c-line-soft: 233 226 214;
+
+  --c-ink: 20 20 19;
+  --c-body: 61 61 58;
+  --c-muted: 93 91 85;
+  --c-faint: 96 94 88;
+
+  /* Coral darkens on a light ground — #cc785c measures 2.9:1 on cream and is
+     unreadable as text. The brand hue is preserved; the value moves so it can
+     carry text. On-coral flips to white, which clears 5.2:1 on this fill. */
+  --c-coral: 150 76 52;
+  --c-coral-active: 125 62 41;
+  --c-on-coral: 255 255 255;
+
+  --c-nominal: 38 105 90;
+  --c-caution: 138 93 18;
+  --c-warning: 125 95 12;
+  --c-fault: 179 49 47;
+  --c-fault-bright: 156 43 41;
+  --c-success: 47 125 69;
+
+  /* Light inverts the depth model: a white inset highlight is invisible, so
+     it is switched off and elevation comes from the hairline plus a soft,
+     warm-grey shadow at much lower alpha. */
+  --c-shadow: 120 106 86;
+  --c-lit: 255 255 255;
+  --a-lit: 0;
+  --a-sh-soft: 0.10;
+  --a-sh-mid: 0.08;
+  --a-sh-deep: 0.14;
+  --a-sh-raise: 0.18;
+
+  --wash-a: 150 76 52;
+  --wash-a-alpha: 0.05;
+  --wash-b: 38 105 90;
+  --wash-b-alpha: 0.035;
+}
+
+:root[data-theme="blue"] {
+  color-scheme: dark;
+
+  --c-canvas: 10 15 22;
+  --c-surface: 17 25 38;
+  --c-raised: 23 32 47;
+  --c-elevated: 30 42 59;
+  --c-line: 42 56 72;
+  --c-line-soft: 28 38 53;
+
+  --c-ink: 241 246 251;
+  --c-body: 199 212 226;
+  --c-muted: 147 164 184;
+  --c-faint: 134 151 171;
+
+  /* The one place this theme genuinely departs: coral on navy is a clash, so
+     the accent moves to azure. It stays a single accent — the rule is one per
+     theme, not one across all of them. */
+  --c-coral: 98 168 224;
+  --c-coral-active: 74 134 186;
+  --c-on-coral: 10 15 22;
+
+  --c-nominal: 79 191 174;
+  --c-caution: 224 169 79;
+  --c-warning: 212 160 23;
+  --c-fault: 217 83 79;
+  --c-fault-bright: 236 107 103;
+  --c-success: 79 191 106;
+
+  --c-shadow: 2 6 12;
+  --c-lit: 241 246 251;
+  --a-lit: 0.05;
+  --a-sh-soft: 0.3;
+  --a-sh-mid: 0.38;
+  --a-sh-deep: 0.72;
+  --a-sh-raise: 0.82;
+
+  --wash-a: 98 168 224;
+  --wash-a-alpha: 0.07;
+  --wash-b: 79 191 174;
+  --wash-b-alpha: 0.05;
+}
+
+
+/* ROBOSTORE base layer.
+ *
+ * The previous version of this file ran six looping ambient effects at once
+ * (drifting aurora, perspective grid floor, floating motes, hue-panning
+ * headline gradient, spinning conic card borders, a marquee ticker). In a
+ * console whose job is to tell an operator whether a robot is safe, ambient
+ * motion is not free: every looping thing competes with the one thing that
+ * should be allowed to move — a value that is actually changing.
+ *
+ * So the atmosphere here is a single static warm wash, and motion is
+ * rationed to three meanings, all defined in tailwind.config.ts:
+ *   breathe → this reading is streaming right now
+ *   alarm   → the robot is stopped
+ *   sweep   → the lidar is scanning
+ */
+
 @layer base {
   * {
-    @apply border-border/50;
+    @apply border-line;
   }
 
   html,
@@ -14,53 +180,78 @@
   }
 
   body {
-    @apply bg-background text-text font-sans antialiased;
-    position: relative;
-    overflow-x: hidden;
+    @apply bg-canvas font-sans text-body antialiased;
+    /* One static wash, no animation. Warm coral top-left, teal bottom-right,
+       both at very low alpha — enough to keep large dark areas from reading
+       as flat black, not enough to be noticed. */
+    background-image:
+      radial-gradient(1200px 600px at 8% -5%, rgb(var(--wash-a) / var(--wash-a-alpha)), transparent 60%),
+      radial-gradient(900px 500px at 100% 105%, rgb(var(--wash-b) / var(--wash-b-alpha)), transparent 60%);
+    background-attachment: fixed;
+    overflow: hidden; /* the app shell owns scrolling, per region */
   }
 
-  /* Aurora background: four slow-drifting, hue-rotating radial gradients
-     behind all content. Fixed + z-index -1 + pointer-events none so it never
-     interferes with layout or interaction. */
-  body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background:
-      radial-gradient(circle at 15% 20%, rgba(0, 229, 160, 0.16), transparent 40%),
-      radial-gradient(circle at 85% 15%, rgba(56, 189, 248, 0.14), transparent 40%),
-      radial-gradient(circle at 75% 80%, rgba(0, 229, 160, 0.1), transparent 45%),
-      radial-gradient(circle at 20% 85%, rgba(139, 92, 246, 0.14), transparent 45%);
-    animation: aurora-drift 36s ease-in-out infinite alternate;
+  /* Numbers must never reflow as they tick. Every mono readout is tabular. */
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1, "zero" 1;
   }
 
-  @keyframes aurora-drift {
-    0% {
-      transform: translate3d(0, 0, 0) scale(1);
-      filter: hue-rotate(0deg);
-    }
-    100% {
-      transform: translate3d(-2%, 2%, 0) scale(1.05);
-      filter: hue-rotate(25deg);
-    }
+  /* DESIGN.md: display sizes are weight 400-500 with negative tracking —
+     Cormorant needs the optical bump on dark backgrounds to hold its stroke. */
+  .font-display {
+    font-weight: 500;
   }
 
-  /* Thin themed scrollbar */
+  /* One focus treatment for the whole app: a coral ring offset against
+     whatever surface it sits on. Previously each component invented its own. */
+  :focus-visible {
+    outline: 2px solid rgb(var(--c-coral));
+    outline-offset: 2px;
+    /* No forced radius: the outline follows each element's own corners, so
+       the ring hugs 12px tiles, pill chips and the round E-stop alike. */
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  ::selection {
+    background: rgb(var(--c-coral) / 0.3);
+    color: rgb(var(--c-ink));
+  }
+
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
   }
   ::-webkit-scrollbar-track {
-    background: #0a1b20;
+    background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: #2b4d58;
-    border-radius: 4px;
+    background: rgb(var(--c-line));
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #38636f;
+    background: rgb(var(--c-elevated));
+    background-clip: content-box;
+  }
+
+  /* Range inputs are used for the drive limits — they are safety-relevant
+     controls, so they get a real track/thumb rather than the UA default. */
+  input[type="range"] {
+    @apply h-1 w-full cursor-pointer appearance-none rounded-pill bg-elevated;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    @apply h-4 w-4 appearance-none rounded-pill border-2 border-canvas bg-coral;
+    box-shadow: 0 1px 3px rgb(var(--c-shadow) / 0.5);
+  }
+  input[type="range"]::-moz-range-thumb {
+    @apply h-4 w-4 rounded-pill border-2 border-canvas bg-coral;
+  }
+  input[type="range"]:disabled::-webkit-slider-thumb {
+    @apply bg-faint;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -76,174 +267,29 @@
 }
 
 @layer utilities {
-  .stagger-1 {
-    animation-delay: 100ms;
-  }
-  .stagger-2 {
-    animation-delay: 200ms;
-  }
-  .stagger-3 {
-    animation-delay: 300ms;
-  }
-  .stagger-4 {
-    animation-delay: 400ms;
-  }
-  .stagger-5 {
-    animation-delay: 500ms;
+  /* Scroll regions inside the shell. The shell is a fixed-height grid; only
+     these scroll, so the command bar and rail never leave the viewport. */
+  .scroll-region {
+    @apply min-h-0 overflow-y-auto overscroll-contain;
   }
 
-  /* ---- Hub-only effects (AppStorePage), prefixed hub-* ---- */
-
-  .hub-grid-floor {
-    position: absolute;
-    inset: auto 0 0 0;
-    height: 50%;
-    pointer-events: none;
-    background-image:
-      linear-gradient(rgba(0, 229, 160, 0.18) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0, 229, 160, 0.18) 1px, transparent 1px);
-    background-size: 48px 48px;
-    transform: perspective(400px) rotateX(60deg) translateY(0);
-    transform-origin: bottom;
-    mask-image: linear-gradient(to top, black, transparent);
-    -webkit-mask-image: linear-gradient(to top, black, transparent);
-    animation: hub-floor-scroll 4s linear infinite;
+  /* Fades a marquee/overflow strip out at both edges instead of guillotining
+     text mid-word, which is what the old status ticker did. */
+  .edge-fade {
+    -webkit-mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+    mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
   }
 
-  @keyframes hub-floor-scroll {
-    from {
-      background-position: 0 0;
-    }
-    to {
-      background-position: 0 48px;
-    }
+  /* A 1px inner top highlight — the only "depth" trick in the system, and
+     the reason panels read as lit from above without a drop shadow.
+     DESIGN.md: colour-block first, shadow rare. */
+  .lit {
+    box-shadow: inset 0 1px 0 0 rgb(var(--c-lit) / var(--a-lit));
   }
 
-  .hub-gradient-text {
-    background: linear-gradient(90deg, #00e5a0, #38bdf8, #8b5cf6, #00e5a0);
-    background-size: 300% 100%;
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    animation: hub-gradient-pan 8s linear infinite;
-  }
-
-  @keyframes hub-gradient-pan {
-    from {
-      background-position: 0% 50%;
-    }
-    to {
-      background-position: 300% 50%;
-    }
-  }
-
-  .hub-cursor {
-    display: inline-block;
-    width: 0.55ch;
-    background: currentColor;
-    animation: hub-blink 1s step-end infinite;
-  }
-
-  @keyframes hub-blink {
-    0%,
-    50% {
-      opacity: 1;
-    }
-    50.01%,
-    100% {
-      opacity: 0;
-    }
-  }
-
-  .hub-ticker-track {
-    display: flex;
-    width: max-content;
-    animation: hub-ticker-scroll 28s linear infinite;
-  }
-
-  .hub-ticker-track:hover {
-    animation-play-state: paused;
-  }
-
-  @keyframes hub-ticker-scroll {
-    from {
-      transform: translateX(0);
-    }
-    to {
-      transform: translateX(-50%);
-    }
-  }
-
-  .hub-card {
-    --glow: 0, 229, 160;
-    --mx: 50%;
-    --my: 50%;
-    position: relative;
-    transform-style: preserve-3d;
-    transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
-  }
-
-  .hub-card::before {
-    content: "";
-    position: absolute;
-    inset: -1px;
-    border-radius: inherit;
-    padding: 1px;
-    background: conic-gradient(
-      from var(--beam-angle, 0deg),
-      rgba(var(--glow), 0.9),
-      transparent 30%,
-      transparent 70%,
-      rgba(var(--glow), 0.9)
-    );
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    opacity: 0;
-    transition: opacity 0.2s ease-out;
-    animation: hub-beam-spin 4s linear infinite;
-    pointer-events: none;
-  }
-
-  .hub-card:hover::before {
-    opacity: 1;
-  }
-
-  @keyframes hub-beam-spin {
-    from {
-      --beam-angle: 0deg;
-    }
-    to {
-      --beam-angle: 360deg;
-    }
-  }
-
-  .hub-card::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: radial-gradient(
-      220px circle at var(--mx) var(--my),
-      rgba(var(--glow), 0.14),
-      transparent 65%
-    );
-    opacity: 0;
-    transition: opacity 0.2s ease-out;
-    pointer-events: none;
-  }
-
-  .hub-card:hover::after {
-    opacity: 1;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .hub-grid-floor,
-    .hub-gradient-text,
-    .hub-cursor,
-    .hub-ticker-track,
-    .hub-card::before {
-      animation: none !important;
-    }
-  }
+  .stagger-1 { animation-delay: 40ms; }
+  .stagger-2 { animation-delay: 80ms; }
+  .stagger-3 { animation-delay: 120ms; }
+  .stagger-4 { animation-delay: 160ms; }
+  .stagger-5 { animation-delay: 200ms; }
 }

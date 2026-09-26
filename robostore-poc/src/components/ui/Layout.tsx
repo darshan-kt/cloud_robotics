@@ -1,81 +1,129 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 
-// Shared UI kit - every page composes from these. Don't hand-roll a button
-// or a card in a page component; add a variant here instead.
+// Shared UI kit — every page composes from these. Don't hand-roll a button
+// or a panel in a page component; add a variant here instead.
+//
+// What changed from the previous kit, and why:
+//
+// The old kit exposed a `Theme` union of eight Tailwind palette names
+// ("emerald" | "blue" | "amber" | "rose" | "purple" | "pink" | "teal") and
+// let any card pick one. That is a decoration API, and it cost the app its
+// alarm vocabulary: once four app tiles are emerald/rose/purple/amber, a red
+// fault state is just a fifth colour on a colourful page.
+//
+// This kit has no decorative colour input at all. `tone` accepts only the
+// four semantic states from tailwind.config.ts, and most components default
+// to neutral. If you want a panel to stand out, use elevation or type
+// weight — the palette is reserved for telling an operator what is true.
 
-export type Theme = "emerald" | "blue" | "amber" | "rose" | "purple" | "pink" | "teal" | "muted";
+export type Tone = "neutral" | "nominal" | "caution" | "fault" | "brand";
 
-const THEME_BAR: Record<Exclude<Theme, "muted">, string> = {
-  emerald: "from-emerald-400 to-emerald-600",
-  blue: "from-blue-400 to-blue-600",
-  amber: "from-amber-400 to-amber-600",
-  rose: "from-rose-400 to-rose-600",
-  purple: "from-purple-400 to-purple-600",
-  pink: "from-pink-400 to-pink-600",
-  teal: "from-teal-400 to-teal-600",
+const TONE_TEXT: Record<Tone, string> = {
+  neutral: "text-muted",
+  nominal: "text-nominal",
+  caution: "text-caution",
+  fault: "text-fault-bright",
+  brand: "text-coral",
 };
 
-const THEME_BADGE: Record<Theme, string> = {
-  emerald: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-  blue: "bg-blue-500/10 text-blue-400 border-blue-500/30",
-  amber: "bg-amber-500/10 text-amber-400 border-amber-500/30",
-  rose: "bg-rose-500/10 text-rose-400 border-rose-500/30",
-  purple: "bg-purple-500/10 text-purple-400 border-purple-500/30",
-  pink: "bg-pink-500/10 text-pink-400 border-pink-500/30",
-  teal: "bg-teal-500/10 text-teal-400 border-teal-500/30",
-  muted: "bg-textDim/10 text-textMuted border-textDim/30",
+const TONE_CHIP: Record<Tone, string> = {
+  neutral: "border-line bg-elevated/60 text-muted",
+  nominal: "border-nominal/30 bg-nominal/10 text-nominal",
+  caution: "border-caution/30 bg-caution/10 text-caution",
+  fault: "border-fault/40 bg-fault/10 text-fault-bright",
+  brand: "border-coral/30 bg-coral/10 text-coral",
 };
 
-// ---- Card -----------------------------------------------------------
+// ---- Panel ---------------------------------------------------------------
+// The single container primitive. DESIGN.md's elevation model is
+// "colour-block first, shadow rare", so depth comes from the surface ramp
+// (canvas → surface → raised → elevated) plus a 1px lit top edge, not shadows.
 
-interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  theme?: Exclude<Theme, "muted">;
-  hover?: boolean;
+// `title` is widened from the DOM attribute (string) to ReactNode so a panel
+// heading can carry an icon or a status tag.
+interface PanelProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
+  /** Panel heading, rendered in the header strip. */
+  title?: ReactNode;
+  /** Right-aligned slot in the header strip — status tags, small controls. */
+  action?: ReactNode;
+  /** Removes the body padding, for panels holding a canvas or a full-bleed list. */
+  flush?: boolean;
+  /** Lets the panel body scroll instead of growing the page. */
+  scroll?: boolean;
+  tone?: Tone;
   children: ReactNode;
 }
 
-export function Card({ theme, hover = false, className = "", children, ...rest }: CardProps) {
+export function Panel({
+  title,
+  action,
+  flush = false,
+  scroll = false,
+  tone = "neutral",
+  className = "",
+  children,
+  ...rest
+}: PanelProps) {
   return (
     <div
       className={[
-        "relative overflow-hidden rounded-2xl border border-border/50 bg-surface",
-        hover && "transition-transform duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/30",
+        "flex min-h-0 flex-col rounded-lg border bg-surface shadow-panel",
+        tone === "fault" ? "border-fault/40" : "border-line",
         className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      ].join(" ")}
       {...rest}
     >
-      {theme && (
-        <div className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${THEME_BAR[theme]}`} />
+      {(title || action) && (
+        <div className="flex flex-none flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-line-soft px-md py-sm sm:px-lg">
+          <h2 className="flex min-w-0 items-center gap-2 truncate font-sans text-title-sm text-body">
+            {title}
+          </h2>
+          {action && (
+            <div className="flex flex-wrap items-center gap-2 max-sm:[&:has(>:nth-child(3))]:w-full">{action}</div>
+          )}
+        </div>
       )}
-      {children}
+      <div
+        className={[
+          "flex min-h-0 flex-1 flex-col",
+          flush ? "" : "p-md sm:p-lg",
+          scroll ? "scroll-region" : "",
+        ].join(" ")}
+      >
+        {children}
+      </div>
     </div>
   );
 }
 
-// ---- Badge -----------------------------------------------------------
+// ---- Chip ----------------------------------------------------------------
+// DESIGN.md badge-pill / badge-coral, on the dark ramp.
 
-interface BadgeProps {
-  theme?: Theme;
+export function Chip({
+  tone = "neutral",
+  icon,
+  children,
+  className = "",
+}: {
+  tone?: Tone;
+  icon?: ReactNode;
   children: ReactNode;
   className?: string;
-}
-
-export function Badge({ theme = "muted", children, className = "" }: BadgeProps) {
+}) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-[11px] uppercase tracking-wide ${THEME_BADGE[theme]} ${className}`}
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-pill border px-2.5 py-0.5 font-sans text-label uppercase ${TONE_CHIP[tone]} ${className}`}
     >
+      {icon}
       {children}
     </span>
   );
 }
 
-// ---- Button -----------------------------------------------------------
+// ---- Button --------------------------------------------------------------
 
-type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger";
+type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 type ButtonSize = "sm" | "md" | "lg";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -83,20 +131,25 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: ButtonSize;
   icon?: ReactNode;
   loading?: boolean;
+  /** Stretches to the container width. */
+  block?: boolean;
 }
 
-const VARIANT_CLASSES: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-background hover:bg-accent/90",
-  secondary: "bg-info/90 text-background hover:bg-info",
-  outline: "border border-border text-text hover:bg-card",
-  ghost: "text-textMuted hover:text-text hover:bg-card",
-  danger: "bg-danger text-background hover:bg-danger/90",
+const VARIANT: Record<ButtonVariant, string> = {
+  // DESIGN.md button-primary — coral is spent here and essentially nowhere else.
+  primary:
+    "bg-coral text-on-coral hover:bg-coral-active active:bg-coral-active disabled:bg-elevated disabled:text-faint",
+  // DESIGN.md button-secondary-on-dark
+  secondary:
+    "border border-line bg-elevated text-ink hover:border-faint/60 hover:bg-elevated/70 disabled:border-line-soft disabled:bg-raised disabled:text-faint",
+  ghost: "text-muted hover:bg-elevated hover:text-ink disabled:bg-transparent disabled:text-faint/70",
+  danger: "bg-fault text-ink hover:bg-fault-bright disabled:bg-fault/30 disabled:text-muted",
 };
 
-const SIZE_CLASSES: Record<ButtonSize, string> = {
-  sm: "px-3 py-1.5 text-xs",
-  md: "px-4 py-2 text-sm",
-  lg: "px-6 py-3 text-base",
+const BTN_SIZE: Record<ButtonSize, string> = {
+  sm: "h-8 gap-1.5 px-3 text-[13px]",
+  md: "h-10 gap-2 px-5 text-button",
+  lg: "h-12 gap-2 px-6 text-title-sm",
 };
 
 export function Button({
@@ -104,6 +157,7 @@ export function Button({
   size = "md",
   icon,
   loading = false,
+  block = false,
   disabled,
   className = "",
   children,
@@ -113,11 +167,13 @@ export function Button({
     <button
       disabled={disabled || loading}
       className={[
-        "inline-flex items-center justify-center gap-2 rounded-lg font-mono font-medium tracking-wide",
-        "transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-        "disabled:cursor-not-allowed disabled:opacity-50",
-        VARIANT_CLASSES[variant],
-        SIZE_CLASSES[size],
+        "inline-flex flex-none items-center justify-center rounded-md font-sans font-medium",
+        "transition-[color,background-color,border-color,transform] duration-150",
+        "active:translate-y-px disabled:active:translate-y-0",
+        "disabled:cursor-not-allowed",
+        VARIANT[variant],
+        BTN_SIZE[size],
+        block ? "w-full" : "",
         className,
       ].join(" ")}
       {...rest}
@@ -128,28 +184,134 @@ export function Button({
   );
 }
 
-// ---- Skeleton -----------------------------------------------------------
+// ---- Field ---------------------------------------------------------------
+// DESIGN.md text-input, on dark. Labels are sans (not mono) — mono is
+// reserved for values the robot produced.
 
-export function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded-md bg-card ${className}`} />;
+export function Field({
+  label,
+  hint,
+  error,
+  children,
+}: {
+  label: string;
+  hint?: ReactNode;
+  error?: string | null;
+  children: ReactNode;
+}) {
+  return (
+    <label className="flex flex-col gap-2">
+      <span className="font-sans text-label uppercase text-muted">
+        {label}
+      </span>
+      {children}
+      {error ? (
+        <span className="font-sans text-caption text-fault-bright">{error}</span>
+      ) : (
+        hint && <span className="font-sans text-caption text-faint">{hint}</span>
+      )}
+    </label>
+  );
 }
 
-// ---- EmptyState -----------------------------------------------------------
+/** Shared input styling — apply to any bare <input> so they can't drift. */
+export const inputClass =
+  "h-10 w-full rounded-md border border-line bg-canvas px-3 font-sans text-body-sm text-ink " +
+  "placeholder:text-faint transition-colors hover:border-faint/50 focus:border-coral " +
+  "disabled:cursor-not-allowed disabled:opacity-50";
 
-interface EmptyStateProps {
+// ---- Skeleton ------------------------------------------------------------
+
+export function Skeleton({ className = "" }: { className?: string }) {
+  return <div className={`animate-breathe rounded-md bg-elevated ${className}`} />;
+}
+
+// ---- EmptyState ----------------------------------------------------------
+
+export function EmptyState({
+  icon,
+  title,
+  description,
+  action,
+  className = "",
+}: {
   icon?: ReactNode;
   title: string;
   description?: string;
   action?: ReactNode;
-}
-
-export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
+  className?: string;
+}) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/60 px-6 py-12 text-center">
-      {icon && <div className="text-textDim">{icon}</div>}
-      <p className="font-mono text-sm font-medium text-text">{title}</p>
-      {description && <p className="max-w-sm text-sm text-textMuted">{description}</p>}
-      {action}
+    <div
+      className={`flex flex-1 flex-col items-center justify-center gap-2 px-lg py-lg text-center ${className}`}
+    >
+      {icon && (
+        <div className="lit mb-2 flex h-12 w-12 items-center justify-center rounded-lg border border-line bg-raised text-faint [&_svg]:h-5 [&_svg]:w-5">
+          {icon}
+        </div>
+      )}
+      <p className="font-sans text-title-sm text-body">{title}</p>
+      {description && (
+        <p className="max-w-xs text-pretty font-sans text-body-sm text-faint">{description}</p>
+      )}
+      {action && <div className="mt-2">{action}</div>}
     </div>
   );
 }
+
+// ---- SectionTitle --------------------------------------------------------
+// The editorial voice from DESIGN.md: serif display for the thing you're
+// looking at, sans for everything that describes it.
+
+export function SectionTitle({
+  eyebrow,
+  title,
+  description,
+  action,
+}: {
+  eyebrow?: ReactNode;
+  title: ReactNode;
+  description?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-lg">
+      <div className="min-w-0">
+        {eyebrow && (
+          <p className="mb-2 flex items-center gap-2 font-sans text-label uppercase text-muted">
+            {eyebrow}
+          </p>
+        )}
+        <h1 className="text-balance font-display text-display-md text-ink">{title}</h1>
+        {description && (
+          <p className="mt-2 max-w-xl font-sans text-body-sm text-muted">{description}</p>
+        )}
+      </div>
+      {action && <div className="flex flex-none items-center gap-2">{action}</div>}
+    </div>
+  );
+}
+
+// ---- KeyValue ------------------------------------------------------------
+// Spec tables: sans label, mono value. Used by the Dashboard hardware panel.
+
+export function KeyValue({
+  label,
+  value,
+  mono = true,
+}: {
+  label: string;
+  value: ReactNode;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-lg border-b border-line-soft py-2.5 last:border-0">
+      <span className="flex-none font-sans text-body-sm text-muted">{label}</span>
+      <span className={`truncate text-right text-body-sm text-body ${mono ? "font-mono" : "font-sans"}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+export { TONE_TEXT };

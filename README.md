@@ -146,6 +146,47 @@ cp .env.example .env
 
 Every value in `.env` has a working default — this step is here so credentials/ports live in one file you can edit, not because you *must* change anything before the first run. See the comments in `.env.example` for what each variable does.
 
+#### If a port is already taken
+
+The stack publishes seven host ports. Their defaults, and the variable that moves each:
+
+| Service | Default | Variable |
+|---|---|---|
+| Frontend (console) | 3000 | `FRONTEND_PORT` |
+| Backend API | 8000 | `BACKEND_PORT` |
+| Robot health | 8080 | `ROBOT_HEALTH_PORT` |
+| MQTT broker | 1883 | `MQTT_HOST_PORT` |
+| MQTT over TLS | 8883 | `MQTT_TLS_HOST_PORT` |
+| PostgreSQL | 5432 | `POSTGRES_PORT` |
+| Redis | 6379 | `REDIS_PORT` |
+
+`coturn` is the exception: it runs with `network_mode: host`, so it binds the host
+directly rather than publishing a mapped port — `TURN_PORT` (3478) plus the UDP relay
+range `TURN_MIN_PORT`–`TURN_MAX_PORT` (49160–49200). A clash there shows up as coturn
+failing in its own log rather than as a Docker bind error, and only breaks video.
+
+If another project on your machine already holds one, Docker refuses to start that
+container with `failed to bind host port …: address already in use`. Change the
+number in `.env` and run `make up` again — nothing in the repository needs editing,
+and `.env` is gitignored, so the override stays local to your machine.
+
+> **Moving the frontend or backend port means moving four values, not one.** The
+> browser is told where the API lives, and the API is told which origin may call it,
+> so both have to follow:
+>
+> ```bash
+> FRONTEND_PORT=3300                            # where the console is served
+> BACKEND_PORT=8200                             # where the API is served
+> API_BASE_URL=http://localhost:8200            # what the BROWSER is told to call
+> CORS_ALLOWED_ORIGINS=http://localhost:3300    # which origin the API will answer
+> ```
+>
+> Miss `API_BASE_URL` and the console loads but every request goes to a dead port.
+> Miss `CORS_ALLOWED_ORIGINS` and the browser blocks the request before it is sent —
+> which Firefox reports as `NetworkError when attempting to fetch resource` and
+> Chrome as a CORS error, neither of which sounds like a port problem. The server is
+> healthy the whole time; only the allowlist is wrong.
+
 ### 2. Build and start the stack
 
 ```bash
@@ -154,7 +195,17 @@ make up                   # docker compose up -d --build, then waits for health 
 
 This builds and starts all **7 services**: `mosquitto` (MQTT broker), `redis`, `postgres`, `coturn` (WebRTC TURN relay), `backend` (FastAPI), `frontend` (React), and `robot` (ROS2 + Gazebo + the Robot Cloud Agent). The first run takes a few minutes (Gazebo/GStreamer base images are large); later runs reuse Docker's build cache and are fast.
 
-When it prints "Stack is up," everything is healthy and the console is ready at **http://localhost:3000**.
+When it prints "Stack is up," everything is healthy and the console is ready at
+**http://localhost:3000** — or whatever `FRONTEND_PORT` you set. `make up` reads
+`.env` and prints the URLs it actually bound, so trust its output over this page if
+you have changed a port:
+
+```
+Stack is up:
+  Console:  http://localhost:3000  (login: operator / …)
+  Backend:  http://localhost:8000/health
+  Robot:    http://localhost:8080/health
+```
 
 ### 3. Verify everything is healthy
 
@@ -331,7 +382,8 @@ npm run dev
 Vite prints the local URL — `http://localhost:3100` by default (see
 `vite.config.ts`), deliberately not 3000 so it can run side by side with the
 real operator console (`cloud-container/frontend`) if that's up too. Stop
-with `Ctrl+C` — nothing else to tear down.
+with `Ctrl+C` — nothing else to tear down. No backend is needed: the login is
+a client-side stub and none of the four apps calls a server yet.
 
 Optional production build: `npm run build` (`tsc --noEmit && vite build` →
 `robostore-poc/dist/`), then `npm run preview` to serve it locally.
@@ -348,9 +400,26 @@ make robostore-down            # stop it
 
 This uses [`docker-compose.robostore.yml`](docker-compose.robostore.yml) —
 its own file, own `name:` (Compose project `robostore-poc`), never mixed
-into `make ps`/`make logs` for the main stack. `ROBOSTORE_PORT` (default
-3100) and `VITE_GATEWAY_URL` are overridable the same way as every other
-port/URL in this project — see `.env.example`.
+into `make ps`/`make logs` for the main stack.
+
+Its ports, overridable in `.env` like every other port here — see
+[If a port is already taken](#if-a-port-is-already-taken):
+
+| What | Default | Variable |
+|---|---|---|
+| Dev server (Vite) | 3100 | `ROBOSTORE_PORT` |
+| Prod build (nginx) | 3101 | `ROBOSTORE_PROD_PORT` |
+
+**Moving ROBOSTORE's port is a one-value change**, unlike the main stack's
+frontend — there is no `API_BASE_URL` or `CORS_ALLOWED_ORIGINS` to keep in
+step, because its auth is a client-side stub and nothing it renders calls a
+backend yet. `VITE_GATEWAY_URL` (default `http://localhost:1717`) points at
+a gateway that does not exist yet; changing ROBOSTORE's own port does not
+affect it.
+
+Because it is a separate Compose project on its own ports, ROBOSTORE and the
+full stack run side by side — `make robostore-up` and `make up` do not
+interfere, and `make robostore-down` leaves the main stack untouched.
 
 There's also a `prod` profile that builds and serves the compiled static
 bundle through nginx instead of Vite's dev server, on a separate port

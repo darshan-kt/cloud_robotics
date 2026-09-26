@@ -6,9 +6,10 @@ import {
   type MouseEvent as ReactMouseEvent,
   type TouchEvent as ReactTouchEvent,
 } from "react";
-import { ArrowDownToLine, ArrowUpToLine, Home, OctagonX, Package, Radio, Smartphone } from "lucide-react";
-import { Header } from "../components/layout/Header";
-import { Card, Badge, Button } from "../components/ui/Layout";
+import { ArrowDownToLine, ArrowUpToLine, Home, OctagonX, Package } from "lucide-react";
+import { AppShell } from "../components/layout/AppShell";
+import { Button, Panel } from "../components/ui/Layout";
+import { Readout, SignalTag } from "../components/ui/Signal";
 import { useToast } from "../components/ui/Toast";
 import * as localDb from "../lib/localDb";
 import { GATEWAY_URL } from "../lib/config";
@@ -107,9 +108,23 @@ function useInlineTelemetry() {
 
 // ---- LIDAR HUD canvas ------------------------------------------------
 
+// Canvas can't read Tailwind tokens, so the HUD's palette is declared once
+// here against the same DESIGN.md values as tailwind.config.ts.
+const HUD = {
+  floor: "#100f0d", // canvas
+  ring: "rgba(160, 157, 150, 0.16)", // muted, low alpha
+  ringLabel: "rgba(160, 157, 150, 0.7)",
+  crosshair: "rgba(160, 157, 150, 0.1)",
+  sweep: "93, 184, 166", // nominal / accent-teal — the beam is "sensing"
+  hit: "198, 69, 69", // fault — a return is an obstacle, and obstacles are red
+  robot: "#cc785c", // coral — the vehicle itself is the brand mark on the map
+  robotEdge: "#faf9f5",
+  idle: "#908d86", // faint — the AA-measured tertiary tone
+} as const;
+
 function renderLidarHud(ctx: CanvasRenderingContext2D, size: number, scan: ScanFrame | null, sweepAngle: number) {
   ctx.clearRect(0, 0, size, size);
-  ctx.fillStyle = "#0a1b20";
+  ctx.fillStyle = HUD.floor;
   ctx.fillRect(0, 0, size, size);
 
   const cx = size / 2;
@@ -118,9 +133,9 @@ function renderLidarHud(ctx: CanvasRenderingContext2D, size: number, scan: ScanF
   const radius = size / 2 - 26;
   const pxPerM = radius / maxRange;
 
-  ctx.strokeStyle = "rgba(56, 189, 248, 0.25)";
-  ctx.fillStyle = "rgba(136, 146, 168, 0.8)";
-  ctx.font = "10px monospace";
+  ctx.strokeStyle = HUD.ring;
+  ctx.fillStyle = HUD.ringLabel;
+  ctx.font = '10px "JetBrains Mono", monospace';
   ctx.lineWidth = 1;
   for (let m = 1; m <= Math.ceil(maxRange); m++) {
     const r = m * pxPerM;
@@ -130,7 +145,7 @@ function renderLidarHud(ctx: CanvasRenderingContext2D, size: number, scan: ScanF
     ctx.fillText(`${m}m`, cx + 4, cy - r - 2);
   }
 
-  ctx.strokeStyle = "rgba(56, 189, 248, 0.15)";
+  ctx.strokeStyle = HUD.crosshair;
   ctx.beginPath();
   ctx.moveTo(cx - radius, cy);
   ctx.lineTo(cx + radius, cy);
@@ -144,15 +159,15 @@ function renderLidarHud(ctx: CanvasRenderingContext2D, size: number, scan: ScanF
   ctx.translate(cx, cy);
   ctx.rotate(normalizedSweep);
   const wedge = ctx.createLinearGradient(0, 0, radius, 0);
-  wedge.addColorStop(0, "rgba(0, 229, 160, 0.35)");
-  wedge.addColorStop(1, "rgba(0, 229, 160, 0)");
+  wedge.addColorStop(0, `rgba(${HUD.sweep}, 0.28)`);
+  wedge.addColorStop(1, `rgba(${HUD.sweep}, 0)`);
   ctx.fillStyle = wedge;
   ctx.beginPath();
   ctx.moveTo(0, 0);
   ctx.arc(0, 0, radius, -0.12, 0.12);
   ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = "rgba(0, 229, 160, 0.8)";
+  ctx.strokeStyle = `rgba(${HUD.sweep}, 0.75)`;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(0, 0);
@@ -171,29 +186,31 @@ function renderLidarHud(ctx: CanvasRenderingContext2D, size: number, scan: ScanF
       let angleDiff = Math.abs(screenAngle - normalizedSweep);
       if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
       const alpha = 0.35 + 0.65 * Math.max(0, 1 - angleDiff / 1.0);
-      ctx.fillStyle = `rgba(255, 77, 106, ${alpha.toFixed(2)})`;
+      ctx.fillStyle = `rgba(${HUD.hit}, ${alpha.toFixed(2)})`;
       ctx.beginPath();
       ctx.arc(cx + dx, cy + dy, 2, 0, Math.PI * 2);
       ctx.fill();
     });
   } else {
-    ctx.fillStyle = "#8892a8";
-    ctx.font = "12px monospace";
+    ctx.fillStyle = HUD.idle;
+    ctx.font = '11px "JetBrains Mono", monospace';
     ctx.textAlign = "center";
-    ctx.fillText("WAITING FOR /scan …", cx, cy);
+    // Offset below the robot node so the text never sits under the marker,
+    // which is what made the old HUD read as "WAITING FOR ● /scan".
+    ctx.fillText("NO /scan DATA", cx, cy + 28);
     ctx.textAlign = "left";
   }
 
   // Robot node + forward-facing indicator - always drawn, regardless of data.
-  ctx.fillStyle = "#00e5a0";
-  ctx.strokeStyle = "#e8ecf4";
+  ctx.fillStyle = HUD.robot;
+  ctx.strokeStyle = HUD.robotEdge;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.arc(cx, cy, 7, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = "#00e5a0";
+  ctx.fillStyle = HUD.robot;
   ctx.beginPath();
   ctx.moveTo(cx, cy - radius - 14);
   ctx.lineTo(cx - 6, cy - radius - 4);
@@ -215,8 +232,12 @@ function KeyTile({ label, active, onPress, onRelease }: { label: string; active:
         onPress();
       }}
       onTouchEnd={onRelease}
-      className={`flex h-14 w-14 select-none items-center justify-center rounded-xl border font-mono text-sm font-bold transition-colors ${
-        active ? "border-accent bg-accent text-background" : "border-border bg-card text-text hover:bg-card/70"
+      aria-label={`Drive ${label}`}
+      aria-pressed={active}
+      className={`flex h-12 w-12 select-none items-center justify-center rounded-md border font-mono text-title-sm transition-colors ${
+        active
+          ? "border-coral bg-coral text-on-coral"
+          : "border-line bg-elevated text-body hover:border-faint/60 hover:text-ink"
       }`}
     >
       {label}
@@ -226,7 +247,8 @@ function KeyTile({ label, active, onPress, onRelease }: { label: string; active:
 
 // ---- Page ------------------------------------------------
 
-const HUD_SIZE = 380;
+/** Smallest useful HUD; it grows to fill whatever the panel gives it. */
+const HUD_MIN = 260;
 
 export function RemoteControllerPage() {
   const toast = useToast();
@@ -248,6 +270,7 @@ export function RemoteControllerPage() {
   const [joystickPos, setJoystickPos] = useState({ x: 0, y: 0 });
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const hudBoxRef = useRef<HTMLDivElement>(null);
   const joystickRef = useRef<HTMLDivElement>(null);
   const scanRef = useRef<ScanFrame | null>(null);
   scanRef.current = scan;
@@ -271,15 +294,30 @@ export function RemoteControllerPage() {
   // ~1Hz scan updates.
   useEffect(() => {
     let rafId: number;
+
     function draw() {
       const canvas = canvasRef.current;
-      if (canvas) {
+      const box = hudBoxRef.current;
+      if (canvas && box) {
+        // Square, sized to the shorter edge of whatever space the panel has.
+        const size = Math.max(HUD_MIN, Math.floor(Math.min(box.clientWidth, box.clientHeight)));
+        const dpr = window.devicePixelRatio || 1;
+        if (canvas.width !== size * dpr || canvas.height !== size * dpr) {
+          canvas.width = size * dpr;
+          canvas.height = size * dpr;
+          canvas.style.width = `${size}px`;
+          canvas.style.height = `${size}px`;
+        }
         const ctx = canvas.getContext("2d");
-        if (ctx) renderLidarHud(ctx, HUD_SIZE, scanRef.current, sweepAngleRef.current);
+        if (ctx) {
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          renderLidarHud(ctx, size, scanRef.current, sweepAngleRef.current);
+        }
       }
       sweepAngleRef.current += 0.04;
       rafId = requestAnimationFrame(draw);
     }
+
     rafId = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(rafId);
   }, []);
@@ -512,158 +550,301 @@ export function RemoteControllerPage() {
     }
   }
 
+  const driving = linearVel !== 0 || angularVel !== 0;
+
   return (
-    <div className="min-h-screen">
-      <Header showBack title="Remote Controller" icon={Smartphone} iconColor="text-purple-400" />
+    <AppShell
+      title="Teleop"
+      toolbar={
+        <div className="hidden items-center gap-md md:flex">
+          <SignalTag
+            state={ctrlConnected ? "live" : "absent"}
+            label={ctrlConnected ? "CONTROL LINK" : "NO CONTROL LINK"}
+          />
+          <SignalTag
+            state={telemetryConnected ? "live" : "absent"}
+            label={
+              telemetryConnected && latencyMs !== null ? `TELEMETRY ${latencyMs}MS` : "NO TELEMETRY"
+            }
+          />
+        </div>
+      }
+    >
+      {/* Two columns, both full-height. The HUD is the thing an operator
+          watches while driving, so it gets every pixel the viewport allows
+          instead of a fixed 380px square with empty page beneath it. */}
+      <div className="mx-auto grid max-w-[1400px] lg:h-full grid-cols-1 gap-lg lg:grid-cols-[1fr_360px]">
+        {/* ---- Left: the view out of the robot ---- */}
+        <div className="flex min-h-0 flex-col gap-lg">
+          <Panel
+            title="Lidar"
+            flush
+            className="min-h-[320px] flex-1"
+            action={
+              <>
+                {/* The tag describes the DATA, the button controls the
+                    subscription — they must not both say "scan off". */}
+                <SignalTag
+                  state={scan ? "live" : "absent"}
+                  label={scan ? "SCANNING" : scanUpdateOn ? "AWAITING FRAME" : "NO DATA"}
+                />
+                <button
+                  onClick={() => setScanUpdateOn((v) => !v)}
+                  aria-pressed={scanUpdateOn}
+                  className={`rounded-md border px-2.5 py-1 font-sans text-label uppercase transition-colors ${
+                    scanUpdateOn
+                      ? "border-coral/40 bg-coral/10 text-coral"
+                      : "border-line text-faint hover:border-faint/60 hover:text-body"
+                  }`}
+                >
+                  Scan {scanUpdateOn ? "on" : "off"}
+                </button>
+              </>
+            }
+          >
+            <div ref={hudBoxRef} className="flex min-h-0 flex-1 items-center justify-center p-md">
+              <canvas
+                ref={canvasRef}
+                className="rounded-md"
+                role="img"
+                aria-label={
+                  scan
+                    ? `Lidar scan, ${scan.ranges.filter((r) => r !== null).length} returns`
+                    : "Lidar scan, no data"
+                }
+              />
+            </div>
+          </Panel>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_400px]">
-          {/* LIDAR HUD + velocity readout */}
-          <div className="space-y-4">
-            <Card className="flex flex-col items-center gap-3 p-4">
-              <div className="flex w-full items-center justify-between">
-                <h3 className="font-mono text-xs uppercase tracking-wide text-textMuted">LIDAR HUD</h3>
-                <div className="flex items-center gap-2">
-                  <Badge theme={telemetryConnected ? "emerald" : "muted"}>
-                    {telemetryConnected ? (latencyMs !== null ? `${latencyMs}ms` : "LINKED") : "OFFLINE"}
-                  </Badge>
-                  <button
-                    onClick={() => setScanUpdateOn((v) => !v)}
-                    className={`rounded-full border px-3 py-1 font-mono text-[10px] uppercase tracking-wide transition-colors ${
-                      scanUpdateOn ? "border-accent bg-accent/10 text-accent" : "border-border text-textDim hover:text-text"
-                    }`}
-                  >
-                    Scan Update: {scanUpdateOn ? "ON" : "OFF"}
-                  </button>
-                </div>
-              </div>
-              <canvas ref={canvasRef} width={HUD_SIZE} height={HUD_SIZE} className="max-w-full rounded-xl" />
-            </Card>
-
-            <div className="grid grid-cols-2 gap-4">
-              <Card className="p-4">
-                <p className="font-mono text-[10px] uppercase tracking-wide text-textDim">Linear Velocity</p>
-                <p className="mt-1 font-mono text-lg font-semibold text-text">{linearVel.toFixed(2)} m/s</p>
-              </Card>
-              <Card className="p-4">
-                <p className="font-mono text-[10px] uppercase tracking-wide text-textDim">Angular Velocity</p>
-                <p className="mt-1 font-mono text-lg font-semibold text-text">{angularVel.toFixed(2)} rad/s</p>
-              </Card>
+          {/* Commanded velocity. These are what the console is SENDING, not
+              what the robot reports — labelled accordingly. */}
+          <div className="grid flex-none grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line shadow-panel">
+            <div className="bg-surface p-md">
+              <Readout
+                label="Commanded linear"
+                value={linearVel.toFixed(2)}
+                unit="m/s"
+                state={ctrlConnected ? "live" : "absent"}
+                tone={driving ? "nominal" : "default"}
+              />
+            </div>
+            <div className="bg-surface p-md">
+              <Readout
+                label="Commanded angular"
+                value={angularVel.toFixed(2)}
+                unit="rad/s"
+                state={ctrlConnected ? "live" : "absent"}
+                tone={driving ? "nominal" : "default"}
+              />
             </div>
           </div>
-
-          {/* Driving controls */}
-          <div className="space-y-4">
-            <Card className="space-y-3 p-4">
-              <h3 className="font-mono text-xs uppercase tracking-wide text-textMuted">Drive Limit Controls</h3>
-              <label className="block">
-                <div className="mb-1 flex justify-between font-mono text-[11px] text-textMuted">
-                  <span>Max Linear Speed</span>
-                  <span>{maxLinearSpeed.toFixed(2)} m/s</span>
-                </div>
-                <input
-                  type="range"
-                  min={0.1}
-                  max={0.8}
-                  step={0.05}
-                  value={maxLinearSpeed}
-                  onChange={(e) => setMaxLinearSpeed(parseFloat(e.target.value))}
-                  className="w-full accent-accent"
-                />
-              </label>
-              <label className="block">
-                <div className="mb-1 flex justify-between font-mono text-[11px] text-textMuted">
-                  <span>Max Turn Rate</span>
-                  <span>{maxAngularSpeed.toFixed(2)} rad/s</span>
-                </div>
-                <input
-                  type="range"
-                  min={0.1}
-                  max={1.0}
-                  step={0.05}
-                  value={maxAngularSpeed}
-                  onChange={(e) => setMaxAngularSpeed(parseFloat(e.target.value))}
-                  className="w-full accent-accent"
-                />
-              </label>
-            </Card>
-
-            <Card className="space-y-3 p-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-mono text-xs uppercase tracking-wide text-textMuted">Steering Interface</h3>
-                <Badge theme={ctrlConnected ? "emerald" : "muted"}>
-                  <Radio className="h-3 w-3" /> {ctrlConnected ? "CTRL LINK" : "CTRL OFFLINE"}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-around gap-4">
-                <div className="grid grid-cols-3 grid-rows-2 gap-2">
-                  <div />
-                  <KeyTile label="W" active={!!keysPressed["w"]} onPress={() => setKeyState("w", true)} onRelease={() => setKeyState("w", false)} />
-                  <div />
-                  <KeyTile label="A" active={!!keysPressed["a"]} onPress={() => setKeyState("a", true)} onRelease={() => setKeyState("a", false)} />
-                  <KeyTile label="S" active={!!keysPressed["s"]} onPress={() => setKeyState("s", true)} onRelease={() => setKeyState("s", false)} />
-                  <KeyTile label="D" active={!!keysPressed["d"]} onPress={() => setKeyState("d", true)} onRelease={() => setKeyState("d", false)} />
-                </div>
-
-                <div
-                  ref={joystickRef}
-                  onMouseDown={handleJoystickStart}
-                  onTouchStart={handleJoystickStart}
-                  className="relative h-32 w-32 flex-shrink-0 touch-none rounded-full border border-border bg-background"
-                >
-                  <div
-                    className={`absolute left-1/2 top-1/2 h-10 w-10 rounded-full border-2 ${
-                      isDragging ? "border-accent bg-accent/30" : "border-textDim bg-card"
-                    }`}
-                    style={{ transform: `translate(-50%, -50%) translate(${joystickPos.x}px, ${joystickPos.y}px)` }}
-                  />
-                </div>
-              </div>
-            </Card>
-
-            <Card className="space-y-4 p-4">
-              <h3 className="font-mono text-xs uppercase tracking-wide text-textMuted">Robotic Actuators</h3>
-              <div>
-                <div className="mb-1 flex justify-between font-mono text-[11px] text-textMuted">
-                  <span>Lift Extension</span>
-                  <span>{liftLevel}%</span>
-                </div>
-                <div className="mb-2 h-2 rounded-full bg-card">
-                  <div className="h-2 rounded-full bg-info transition-[width]" style={{ width: `${liftLevel}%` }} />
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" icon={<ArrowUpToLine className="h-3.5 w-3.5" />} onClick={handleRaiseLift} disabled={isLifting !== null || liftLevel >= 100}>
-                    Raise
-                  </Button>
-                  <Button variant="outline" size="sm" icon={<ArrowDownToLine className="h-3.5 w-3.5" />} onClick={handleLowerLift} disabled={isLifting !== null || liftLevel <= 0}>
-                    Lower
-                  </Button>
-                </div>
-              </div>
-
-              <div className="border-t border-border/40 pt-3">
-                <div className="mb-3 flex gap-2">
-                  <Button variant="ghost" size="sm" icon={<Home className="h-3.5 w-3.5" />} onClick={() => toast.show("info", "Go Home is not wired to a real behavior yet.")}>
-                    Go Home
-                  </Button>
-                  <Button variant="ghost" size="sm" icon={<Package className="h-3.5 w-3.5" />} onClick={() => toast.show("info", "Dock Robot is not wired to a real behavior yet.")}>
-                    Dock Robot
-                  </Button>
-                </div>
-                <Button variant="danger" size="md" icon={<OctagonX className="h-4 w-4" />} onClick={triggerEStop} className="w-full">
-                  EMERGENCY STOP (E-STOP)
-                </Button>
-              </div>
-            </Card>
-
-            {robotState && (
-              <p className="text-center font-mono text-[10px] text-textDim">
-                odom: x {robotState.x.toFixed(2)}  y {robotState.y.toFixed(2)}  θ {robotState.theta.toFixed(2)}
-              </p>
-            )}
-          </div>
         </div>
-      </main>
-    </div>
+
+        {/* ---- Right: the controls ---- */}
+        <div className="flex min-h-0 flex-col gap-lg overflow-y-auto">
+          <Panel title="Steering" className="flex-none">
+            <div className="flex items-center justify-between gap-lg">
+              <div className="grid grid-cols-3 grid-rows-2 gap-1.5">
+                <div />
+                <KeyTile
+                  label="W"
+                  active={!!keysPressed["w"]}
+                  onPress={() => setKeyState("w", true)}
+                  onRelease={() => setKeyState("w", false)}
+                />
+                <div />
+                <KeyTile
+                  label="A"
+                  active={!!keysPressed["a"]}
+                  onPress={() => setKeyState("a", true)}
+                  onRelease={() => setKeyState("a", false)}
+                />
+                <KeyTile
+                  label="S"
+                  active={!!keysPressed["s"]}
+                  onPress={() => setKeyState("s", true)}
+                  onRelease={() => setKeyState("s", false)}
+                />
+                <KeyTile
+                  label="D"
+                  active={!!keysPressed["d"]}
+                  onPress={() => setKeyState("d", true)}
+                  onRelease={() => setKeyState("d", false)}
+                />
+              </div>
+
+              <div
+                ref={joystickRef}
+                onMouseDown={handleJoystickStart}
+                onTouchStart={handleJoystickStart}
+                role="application"
+                aria-label="Virtual joystick — or use W, A, S, D"
+                className="relative h-28 w-28 flex-none touch-none rounded-pill border border-line bg-canvas"
+              >
+                {/* Centre crosshair, so the stick's rest position is legible. */}
+                <span className="absolute left-1/2 top-1/2 h-6 w-px -translate-x-1/2 -translate-y-1/2 bg-line" />
+                <span className="absolute left-1/2 top-1/2 h-px w-6 -translate-x-1/2 -translate-y-1/2 bg-line" />
+                <div
+                  className={`absolute left-1/2 top-1/2 h-10 w-10 rounded-pill border-2 transition-colors ${
+                    isDragging ? "border-coral bg-coral/30" : "border-faint bg-elevated"
+                  }`}
+                  style={{
+                    transform: `translate(-50%, -50%) translate(${joystickPos.x}px, ${joystickPos.y}px)`,
+                  }}
+                />
+              </div>
+            </div>
+
+            <p className="mt-md font-sans text-caption text-faint">
+              Hold <kbd className="font-mono text-muted">W A S D</kbd> or drag the stick. Release to
+              stop — one zero frame is sent on release.
+            </p>
+          </Panel>
+
+          <Panel title="Drive limits" className="flex-none" action={<SignalTag state="cached" label="LOCAL CAP" />}>
+            <div className="flex flex-col gap-lg">
+              <SliderRow
+                label="Max linear speed"
+                value={maxLinearSpeed}
+                display={`${maxLinearSpeed.toFixed(2)} m/s`}
+                min={0.1}
+                max={0.8}
+                step={0.05}
+                onChange={setMaxLinearSpeed}
+              />
+              <SliderRow
+                label="Max turn rate"
+                value={maxAngularSpeed}
+                display={`${maxAngularSpeed.toFixed(2)} rad/s`}
+                min={0.1}
+                max={1.0}
+                step={0.05}
+                onChange={setMaxAngularSpeed}
+              />
+            </div>
+          </Panel>
+
+          <Panel title="Actuators" className="flex-none">
+            <div className="mb-1.5 flex items-baseline justify-between">
+              <span className="font-sans text-body-sm text-muted">Lift extension</span>
+              <span className="font-mono text-body-sm text-ink">{liftLevel}%</span>
+            </div>
+            <div
+              className="h-1 overflow-hidden rounded-pill bg-elevated"
+              role="meter"
+              aria-valuenow={liftLevel}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Lift extension"
+            >
+              <div
+                className="h-full rounded-pill bg-coral transition-[width] duration-150"
+                style={{ width: `${liftLevel}%` }}
+              />
+            </div>
+
+            <div className="mt-md flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<ArrowUpToLine className="h-3.5 w-3.5" />}
+                onClick={handleRaiseLift}
+                disabled={isLifting !== null || liftLevel >= 100}
+              >
+                Raise
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<ArrowDownToLine className="h-3.5 w-3.5" />}
+                onClick={handleLowerLift}
+                disabled={isLifting !== null || liftLevel <= 0}
+              >
+                Lower
+              </Button>
+            </div>
+
+            <div className="mt-lg flex gap-2 border-t border-line-soft pt-md">
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<Home className="h-3.5 w-3.5" />}
+                onClick={() => toast.show("info", "Go Home is not wired to a real behavior yet.")}
+              >
+                Go home
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<Package className="h-3.5 w-3.5" />}
+                onClick={() => toast.show("info", "Dock Robot is not wired to a real behavior yet.")}
+              >
+                Dock
+              </Button>
+            </div>
+          </Panel>
+
+          {/* The driving page keeps its own large stop target in addition to
+              the command bar's — while an operator's hand is on the controls,
+              the stop should be the biggest thing they can hit. */}
+          <Button
+            variant="danger"
+            size="lg"
+            icon={<OctagonX className="h-4 w-4" />}
+            onClick={triggerEStop}
+            block
+            className="flex-none"
+          >
+            Emergency stop
+          </Button>
+
+          {robotState && (
+            <p className="flex-none text-center font-mono text-[11px] text-faint">
+              odom x {robotState.x.toFixed(2)} · y {robotState.y.toFixed(2)} · θ{" "}
+              {robotState.theta.toFixed(2)}
+              {latencyMs !== null && <> · {latencyMs}ms</>}
+            </p>
+          )}
+        </div>
+      </div>
+    </AppShell>
+  );
+}
+
+/** A labelled range input. Both drive limits are safety caps, so the value is
+ *  always visible rather than revealed on hover. */
+function SliderRow({
+  label,
+  value,
+  display,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  display: string;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <label className="block">
+      <div className="mb-2 flex items-baseline justify-between">
+        <span className="font-sans text-body-sm text-muted">{label}</span>
+        <span className="font-mono text-body-sm text-ink">{display}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        aria-label={label}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+      />
+    </label>
   );
 }

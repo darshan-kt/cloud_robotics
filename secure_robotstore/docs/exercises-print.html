@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>The Twelve Exercises</title>
+<link rel="stylesheet" href="exercises-assets/fonts.css">
+<style>
+@page { size: A4; margin: 15mm 14mm 16mm 14mm; }
+@page { @bottom-center { content: counter(page); } }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family:'IBM Plex Sans',ui-sans-serif,system-ui,sans-serif; font-size:9.6pt; line-height:1.52;
+        color:#3d3d3a; background:#fff; margin:0; }
+h1,h2,h3,h4 { color:#141413; margin:0; font-weight:600; letter-spacing:-.01em; }
+h1 { font-size:30pt; line-height:1.05; letter-spacing:-.025em; }
+h2 { font-size:17pt; line-height:1.16; }
+h3 { font-size:12.5pt; line-height:1.3; page-break-after:avoid; break-after:avoid; }
+h4 { font-size:10pt; }
+p { margin:0; }
+code { font-family:'IBM Plex Mono',ui-monospace,monospace; font-size:.88em; background:#f2ede4;
+        border:1px solid #ded6c9; border-radius:3px; padding:.05em .3em; color:#141413; }
+strong { color:#141413; font-weight:600; }
+.stack { display:flex; flex-direction:column; gap:11px; }
+.eyebrow { font-family:'IBM Plex Mono',monospace; font-size:8pt; letter-spacing:.15em;
+            text-transform:uppercase; color:#a9583e; font-weight:600; }
+.snum { font-family:'IBM Plex Mono',monospace; font-size:8pt; letter-spacing:.12em; color:#8e8b82; }
+.lede { font-size:11.5pt; line-height:1.5; color:#6c6a64; }
+.rule { height:2px; background:#a9583e; width:34px; }
+
+/* cover */
+.cover { height:250mm; display:flex; flex-direction:column; justify-content:space-between; page-break-after:always; }
+.cover-mid { display:flex; flex-direction:column; gap:16px; }
+.cover-meta { display:flex; flex-wrap:wrap; gap:7px; }
+.chip { font-family:'IBM Plex Mono',monospace; font-size:8pt; padding:4px 9px; border-radius:3px;
+         border:1px solid #ded6c9; color:#6c6a64; background:#faf8f4; }
+.chip.on { color:#a9583e; border-color:#a9583e; background:#f9efe9; }
+
+/* sections */
+.sec { page-break-before:always; }
+.sechead { display:flex; flex-direction:column; gap:5px; margin-bottom:13px; }
+.prose { max-width:none; }
+
+/* figures */
+figure { margin:0; display:flex; flex-direction:column; gap:7px; page-break-inside:avoid; }
+.figbox { background:#fff; border:1px solid #ded6c9; border-radius:6px; padding:12px 12px 8px; }
+.dg { display:block; width:100%; height:auto; }
+figcaption { font-size:8.6pt; color:#6c6a64; line-height:1.45; }
+figcaption b { color:#3d3d3a; }
+text { font-family:'IBM Plex Sans',sans-serif; }
+.dt { fill:#141413; font-weight:600; }
+.ds { fill:#6c6a64; }
+.dm { fill:#3d3d3a; font-family:'IBM Plex Mono',monospace; font-weight:500; }
+.dl { font-family:'IBM Plex Mono',monospace; font-weight:500; }
+.dbad { fill:#b23a35; font-family:'IBM Plex Mono',monospace; font-weight:500; }
+.dok { fill:#2f7d69; font-family:'IBM Plex Mono',monospace; font-weight:500; }
+
+/* blocks */
+pre { font-family:'IBM Plex Mono',monospace; font-size:8.1pt; line-height:1.6; background:#faf8f4;
+       border:1px solid #ded6c9; border-radius:5px; padding:9px 11px; overflow:hidden;
+       margin:0; color:#3d3d3a; white-space:pre-wrap; word-break:break-word; page-break-inside:avoid; }
+pre .c { color:#8e8b82; }
+.note { border-left:2.5px solid #a9583e; background:#f9efe9; padding:11px 13px; border-radius:0 4px 4px 0;
+         display:flex; flex-direction:column; gap:5px; page-break-inside:avoid; }
+.note.w { border-left-color:#b23a35; background:#fbecea; }
+.note.g { border-left-color:#2f7d69; background:#e9f4f0; }
+.note h4 { font-family:'IBM Plex Mono',monospace; font-size:8pt; letter-spacing:.11em;
+            text-transform:uppercase; color:#a9583e; }
+.note.w h4 { color:#b23a35; } .note.g h4 { color:#2f7d69; }
+
+/* task */
+.task { page-break-before:always; }
+.task-h { display:flex; align-items:flex-start; gap:11px; padding-bottom:9px;
+           border-bottom:2px solid #a9583e; margin-bottom:12px; }
+.tid { font-family:'IBM Plex Mono',monospace; font-size:10pt; font-weight:600; color:#fff;
+        background:#a9583e; padding:4px 9px; border-radius:4px; flex:none; }
+.task-h h2 { flex:1; }
+.fld { display:flex; flex-direction:column; gap:5px; page-break-inside:avoid; }
+.fld h5 { font-family:'IBM Plex Mono',monospace; font-size:7.8pt; letter-spacing:.13em;
+           text-transform:uppercase; color:#a9583e; margin:0; font-weight:600; }
+.fld ol,.fld ul { margin:0; padding-left:17px; display:flex; flex-direction:column; gap:3px; }
+.dw { list-style:none; padding-left:0!important; }
+.dw li { position:relative; padding-left:18px; }
+.dw li::before { content:""; position:absolute; left:0; top:3px; width:10px; height:10px;
+                  border:1.4px solid #2f7d69; border-radius:2px; }
+.ref { font-size:8.4pt; color:#8e8b82; border-top:1px solid #ded6c9; padding-top:8px;
+        display:flex; flex-direction:column; gap:3px; }
+.ref b { font-family:'IBM Plex Mono',monospace; font-size:7.6pt; letter-spacing:.1em;
+          text-transform:uppercase; color:#8e8b82; font-weight:600; }
+
+/* prerequisite cards */
+.pgrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.pcard { border:1px solid #ded6c9; border-radius:6px; padding:9px 10px; background:#faf8f4;
+          display:flex; flex-direction:column; gap:4px; page-break-inside:avoid; }
+.pcard .ph { display:flex; align-items:baseline; gap:7px; }
+.pcard h4 { flex:1; font-size:10.2pt; }
+.lvl { font-family:'IBM Plex Mono',monospace; font-size:7pt; letter-spacing:.07em; text-transform:uppercase;
+        padding:2px 6px; border-radius:3px; font-weight:600; white-space:nowrap; }
+.lvl.e { background:#b23a35; color:#fff; }
+.lvl.h { background:#fbf3e2; color:#9a6a15; border:1px solid #9a6a15; }
+.pcard dl { margin:0; display:flex; flex-direction:column; gap:3px; font-size:8.2pt; line-height:1.38; }
+.pcard dt { font-family:'IBM Plex Mono',monospace; font-size:7.4pt; letter-spacing:.08em;
+             text-transform:uppercase; color:#8e8b82; font-weight:600; }
+.pcard dd { margin:0; color:#3d3d3a; }
+.pcard .chk { font-family:'IBM Plex Mono',monospace; font-size:7.8pt; color:#6c6a64;
+               background:#fff; border:1px solid #ded6c9; border-radius:3px; padding:4px 6px; }
+table { border-collapse:collapse; width:100%; font-size:8.8pt; }
+th { text-align:left; font-family:'IBM Plex Mono',monospace; font-size:7.6pt; letter-spacing:.1em;
+      text-transform:uppercase; color:#8e8b82; font-weight:600; padding:7px 9px;
+      border-bottom:1px solid #ded6c9; background:#f2ede4; }
+td { padding:7px 9px; border-bottom:1px solid #ded6c9; vertical-align:top; }
+.tw { border:1px solid #ded6c9; border-radius:5px; overflow:hidden; page-break-inside:avoid; }
+.foot { border-top:1px solid #ded6c9; margin-top:16px; padding-top:11px; font-size:8.4pt; color:#8e8b82; }
+</style>
+</head><body>
+<div class="cover">
+  <div>
+    <p class="eyebrow">secure_robotstore &middot; training sandbox</p>
+  </div>
+  <div class="cover-mid">
+    <div class="rule"></div>
+    <h1>The Twelve<br>Exercises</h1>
+    <p class="lede">Put the security back into a deliberately insecure cloud&#8209;robotics stack &mdash;
+    one control at a time, each one proved before it is fixed and proved again afterwards.</p>
+    <div class="cover-meta">
+      <span class="chip on">12 exercises</span>
+      <span class="chip">Prerequisites &amp; skills</span>
+      <span class="chip">Setup &amp; run, no Docker</span>
+      <span class="chip">Architecture overview</span>
+      <span class="chip">One infographic per exercise</span>
+    </div>
+  </div>
+  <div>
+    <p style="font-size:8.6pt;color:#8e8b82;line-height:1.5">
+    Companion to <code>secure_robotstore/README.md</code>. Every exercise has a working reference implementation
+    in the main repository, named on its own page &mdash; read it <em>after</em> your attempt, not before.<br>
+    Nothing in this sandbox is secure. That is the point.</p>
+  </div>
+</div>
+<section class="sec">
+  <div class="sechead"><div class="rule"></div><p class="snum">00</p><h2>How to work through this</h2></div>
+  <div class="stack">
+    <p class="lede">Read this page once. It is the difference between applying security controls you half-understand
+    and applying the right ones, in the right place, for the right reason.</p>
+
+    <div class="note"><h4>The method &mdash; three steps, never two</h4>
+      <p><strong>Prove it. Fix it. Prove it again.</strong> Every exercise opens with a command that demonstrates the
+      weakness against the running stack, and closes with that same command failing. A fix you cannot demonstrate is a
+      fix nobody can trust &mdash; and several of the weaknesses here are completely invisible from the user interface.
+      If you cannot show the before, you have not earned the after.</p></div>
+
+    <div class="stack">
+      <h3>Three rules that apply to every exercise</h3>
+      <p><strong>1 &middot; Keep the application working.</strong> A security change that silently stops the data
+      flowing is not a pass. The most common way to fail these is to lock out the <em>legitimate</em> clients along
+      with the attacker &mdash; remember that the agent and the backend are MQTT clients too. After every change:</p>
+      <pre><span class="c"># restart whichever terminal you changed — broker, backend or agent — then:</span>
+curl -s localhost:8001/health/detail | python3 -m json.tool
+<span class="c"># then open http://localhost:3001 — both windows should still tick at 1 Hz</span></pre>
+      <p><strong>2 &middot; Read the reference implementation afterwards, not before.</strong> Every exercise names a
+      file in the main repository that solves the same problem properly. The point is to arrive at the reasoning
+      yourself; the comparison is the check on it, and it is much more useful once you have something to compare.</p>
+      <p><strong>3 &middot; Match the reasoning, not the line count.</strong> The main stack solves these at fleet scale
+      &mdash; many robots, per-device identities, token revocation, hash-chained audit. This sandbox has one device and
+      two data types. Where the reference is more elaborate than this needs, its own docstring usually says why.</p>
+    </div>
+
+    <div class="note w"><h4>Before your first command</h4>
+      <p>Everything here runs against the sandbox on your own machine. Nothing in this book is ever run against a
+      production deployment, against a robot that can move while a person is within reach, or against any system you
+      have not been given written authorisation to test. If you find something that reaches outside the sandbox,
+      that is the moment to stop and tell someone &mdash; not the moment to confirm it.</p></div>
+
+    <div class="stack">
+      <h3>The suggested order &mdash; and why it is this order</h3>
+      <div class="tw"><table>
+        <tr><th style="width:26px">#</th><th>Exercise</th><th>Why it comes here</th></tr>
+        <tr><td>1</td><td>MQTT authentication</td><td>Nothing else can be scoped until the broker can tell clients apart.</td></tr>
+        <tr><td>2</td><td>MQTT topic ACLs</td><td>Identity without authorisation still lets any client write any topic.</td></tr>
+        <tr><td>3</td><td>Credential checking</td><td>The operator half of identity; small code, large consequence.</td></tr>
+        <tr><td>4</td><td>Real tokens</td><td>A credential check is only useful if the resulting session is unforgeable.</td></tr>
+        <tr><td>5</td><td>Protecting endpoints</td><td><strong>The one that matters most.</strong> 3 and 4 are worth nothing without it.</td></tr>
+        <tr><td>6</td><td>Login rate limiting</td><td>Now that the login is correct, make guessing at it expensive.</td></tr>
+        <tr><td>7</td><td>Input size limits</td><td>Availability: one client must not be able to stall everyone.</td></tr>
+        <tr><td>8</td><td>CORS &amp; headers</td><td>The browser-facing edge, cheap to fix and hard to justify skipping.</td></tr>
+        <tr><td>9</td><td>TLS</td><td>Protects the credentials added in 1 &mdash; without it, 1 is undone on every connect.</td></tr>
+        <tr><td>10</td><td>Container hardening</td><td>Bounds what any successful intrusion is able to become.</td></tr>
+        <tr><td>11</td><td>Secrets</td><td>Stops a known-default credential ever reaching a real deployment.</td></tr>
+        <tr><td>12</td><td>Audit logging</td><td>When prevention eventually fails, this is what lets you reconstruct it.</td></tr>
+      </table></div>
+    </div>
+  </div>
+</section>
+<section class="sec">
+  <div class="sechead"><div class="rule"></div><p class="snum">01</p><h2>Prerequisites &amp; skills</h2></div>
+  <div class="stack">
+    <p class="lede">What you need to know before starting, why this particular system needs it, and where each skill
+    shows up in the exercises. Nobody is expected to arrive strong in all twelve.</p>
+    <p><strong>Essential</strong> means an exercise will be confusing without it. <strong>Helpful</strong> means you can
+    learn it as you go, on the exercise that needs it. If you are missing something marked essential, say so at the start
+    &mdash; a day spent closing the gap is cheaper than three weeks of working around it. The line under each card is a
+    quick way to check yourself.</p>
+    <div class="pgrid"><div class="pcard">
+          <div class="ph"><h4>Linux command line</h4><span class="lvl e">Essential</span></div>
+          <dl><dt>What it is</dt><dd>Navigating a shell: files and paths, processes, pipes and redirection, reading logs, environment variables.</dd>
+              <dt>Why this system needs it</dt><dd>There is no graphical interface anywhere in this system. Every service is started, inspected and debugged from a terminal, and the robot itself is reached over SSH.</dd>
+              <dt>Where you use it here</dt><dd>Constantly. <code>curl</code>, <code>grep</code>, <code>ss</code>, <code>psql</code>, <code>mosquitto_sub</code> &mdash; and every &ldquo;Verify&rdquo; step in this book is a shell command.</dd></dl>
+          <div class="chk">&#8227; grep -rn &quot;INTERN TASK&quot; secure_robotstore | wc -l</div></div>
+<div class="pcard">
+          <div class="ph"><h4>Package managers &amp; virtual environments</h4><span class="lvl e">Essential</span></div>
+          <dl><dt>What it is</dt><dd>Installing software with a package manager (<code>apt</code>, <code>brew</code>, <code>npm</code>), and keeping a project's Python packages in a <em>virtual environment</em> of its own.</dd>
+              <dt>Why this system needs it</dt><dd>You will install and run five separate programs by hand &mdash; a broker, two databases, a Python backend and a Node frontend. Nothing is hidden behind an image, so what breaks is always something you can see and fix.</dd>
+              <dt>Where you use it here</dt><dd>Setup, and then daily. The system runs in four terminals; two of them must be inside the project's virtual environment or nothing imports.</dd></dl>
+          <div class="chk">&#8227; source .venv/bin/activate  ·  pip list  ·  npm ls --depth=0</div></div>
+<div class="pcard">
+          <div class="ph"><h4>TCP/IP, ports &amp; sockets</h4><span class="lvl e">Essential</span></div>
+          <dl><dt>What it is</dt><dd>How a process listens on a port, the difference between binding <code>127.0.0.1</code> and <code>0.0.0.0</code>, and how a packet finds its way between two machines.</dd>
+              <dt>Why this system needs it</dt><dd>A large share of real vulnerabilities reduce to &ldquo;something was listening where nobody expected it&rdquo;. You cannot spot that without knowing what a listening socket is.</dd>
+              <dt>Where you use it here</dt><dd>Exercise 10 rebinds the databases and broker to loopback. Understanding why that matters &mdash; and why it is <em>not</em> enough on a robot sitting on campus Wi-Fi &mdash; is the point.</dd></dl>
+          <div class="chk">&#8227; ss -tlnp | grep -E '1884|5433|6380'</div></div>
+<div class="pcard">
+          <div class="ph"><h4>MQTT publish / subscribe</h4><span class="lvl e">Essential</span></div>
+          <dl><dt>What it is</dt><dd>A lightweight messaging protocol for devices: clients publish to named <em>topics</em>, a <em>broker</em> delivers to everyone subscribed. Nobody addresses anybody directly.</dd>
+              <dt>Why this system needs it</dt><dd>MQTT is the only road between the cloud and the robot. Every command, every reading, every heartbeat crosses it &mdash; so it is also the single best place to enforce who may say what.</dd>
+              <dt>Where you use it here</dt><dd>Exercises 1, 2, 7 and 9 are all broker work. You will live inside <code>mosquitto_pub</code> and <code>mosquitto_sub</code>.</dd></dl>
+          <div class="chk">&#8227; mosquitto_sub -h localhost -p 1884 -t 'devices/#' -v</div></div>
+<div class="pcard">
+          <div class="ph"><h4>HTTP &amp; REST</h4><span class="lvl e">Essential</span></div>
+          <dl><dt>What it is</dt><dd>Request methods, status codes, headers and bodies &mdash; and the idea that the server decides, not the client.</dd>
+              <dt>Why this system needs it</dt><dd>The operator API is HTTP. Status codes are how every access-control decision announces itself: 200 versus 401 versus 429 is the entire result of several exercises.</dd>
+              <dt>Where you use it here</dt><dd>Exercises 3, 5, 6 and 8. Exercise 8 is nothing but response headers.</dd></dl>
+          <div class="chk">&#8227; curl -s -o /dev/null -w '%{http_code}\n' localhost:8001/api/int/latest</div></div>
+<div class="pcard">
+          <div class="ph"><h4>WebSockets</h4><span class="lvl h">Helpful</span></div>
+          <dl><dt>What it is</dt><dd>A long-lived, two-way connection that starts as an HTTP request and is then upgraded, so the server can push data without being asked.</dd>
+              <dt>Why this system needs it</dt><dd>Telemetry reaches the browser live rather than by polling. Sockets also break the usual authentication pattern, which is what makes exercise 5 interesting.</dd>
+              <dt>Where you use it here</dt><dd>Exercise 5. The crux: a browser cannot set custom headers on a WebSocket handshake, so <code>Authorization: Bearer</code> is simply unavailable to you.</dd></dl>
+          <div class="chk">&#8227; python3 -c &quot;import websockets&quot;  ·  then connect to /ws/int_api</div></div>
+<div class="pcard">
+          <div class="ph"><h4>Python 3 &amp; asyncio</h4><span class="lvl e">Essential</span></div>
+          <dl><dt>What it is</dt><dd>Reading and writing modern Python; <code>async</code>/<code>await</code>, the event loop, and the difference between a coroutine and a thread.</dd>
+              <dt>Why this system needs it</dt><dd>Both the backend and the agent are asynchronous Python. More importantly, the single event loop is <em>why</em> one oversized message can stall every connected browser at once.</dd>
+              <dt>Where you use it here</dt><dd>Every code change you make. Exercise 7 cannot be understood at all without knowing what blocking the loop means.</dd></dl>
+          <div class="chk">&#8227; Read store.py and say what runs on which thread</div></div>
+<div class="pcard">
+          <div class="ph"><h4>SQL &amp; PostgreSQL</h4><span class="lvl h">Helpful</span></div>
+          <dl><dt>What it is</dt><dd>Tables, queries, and parameterised statements &mdash; placeholders rather than string-concatenated values.</dd>
+              <dt>Why this system needs it</dt><dd>Postgres is the system of record. It is also where you will prove that a forged message really did become a permanent row.</dd>
+              <dt>Where you use it here</dt><dd>Verification throughout. Exercise 3 adds a users table; exercise 12 adds the audit table. The existing inserts are parameterised on purpose &mdash; keep them that way.</dd></dl>
+          <div class="chk">&#8227; psql -h localhost -p 5433 -U robotstore -d robotstore -c '\dt'</div></div>
+<div class="pcard">
+          <div class="ph"><h4>Redis &amp; key-value thinking</h4><span class="lvl h">Helpful</span></div>
+          <dl><dt>What it is</dt><dd>An in-memory store with expiring keys and atomic operations such as <code>INCR</code>, <code>SETNX</code> and <code>GETDEL</code>.</dd>
+              <dt>Why this system needs it</dt><dd>Anything that is live, countable or short-lived lives here: the latest reading, a login-attempt counter, a single-use ticket. Atomicity is what makes those correct under concurrency.</dd>
+              <dt>Where you use it here</dt><dd>Exercise 6's rate limiter is <code>INCR</code> plus <code>EXPIRE</code>. Exercise 5's ticket is <code>GETDEL</code> &mdash; read and delete in one operation, so it cannot be used twice.</dd></dl>
+          <div class="chk">&#8227; redis-cli -p 6380 KEYS '*'</div></div>
+<div class="pcard">
+          <div class="ph"><h4>Cryptography fundamentals</h4><span class="lvl e">Essential</span></div>
+          <dl><dt>What it is</dt><dd>The difference between <em>hashing</em> (one-way), <em>encryption</em> (reversible with a key) and <em>signing</em> (proves origin) &mdash; plus salts and constant-time comparison.</dd>
+              <dt>Why this system needs it</dt><dd>Choosing the wrong one of the three is the most common serious mistake in this whole subject. &ldquo;We encrypt passwords&rdquo; is a sentence that describes a bug.</dd>
+              <dt>Where you use it here</dt><dd>Exercise 3 hashes. Exercise 4 signs. Exercise 9 encrypts. Being able to say which you need, and why, is more than half of each.</dd></dl>
+          <div class="chk">&#8227; Explain why bcrypt is deliberately slow and SHA-256 is not</div></div>
+<div class="pcard">
+          <div class="ph"><h4>TLS &amp; certificates</h4><span class="lvl h">Helpful</span></div>
+          <dl><dt>What it is</dt><dd>How two parties agree on an encrypted channel, what a certificate authority vouches for, and how client certificates differ from server ones.</dd>
+              <dt>Why this system needs it</dt><dd>Everything crosses a network you do not control. Without TLS, the credentials you add in exercise 1 travel in clear text and undo their own purpose.</dd>
+              <dt>Where you use it here</dt><dd>Exercise 9. The trap is mechanical: TLS must be configured <em>before</em> the socket is created, or it silently does nothing.</dd></dl>
+          <div class="chk">&#8227; openssl s_client -connect localhost:8883 -CAfile ca.crt</div></div>
+<div class="pcard">
+          <div class="ph"><h4>Git &amp; reading unfamiliar code</h4><span class="lvl e">Essential</span></div>
+          <dl><dt>What it is</dt><dd>Branches, commits, diffs and history &mdash; and the habit of reading a codebase you did not write before changing it.</dd>
+              <dt>Why this system needs it</dt><dd>You will spend far more time reading than writing. Git history is also evidence: exercise 11 involves searching it for secrets that should never have been committed.</dd>
+              <dt>Where you use it here</dt><dd>Every exercise. Each one names a reference implementation in the main repository to compare your answer against &mdash; after you have attempted it.</dd></dl>
+          <div class="chk">&#8227; git log --oneline -20  ·  git log --all -p | grep -i password</div></div></div>
+    <div class="note g"><h4>What none of these can be replaced by</h4>
+      <p>The habit of <strong>not believing anything you have not checked</strong>. Every exercise here can be
+      &ldquo;completed&rdquo; by changing a config file and assuming it worked. Several of the traps in this book exist
+      precisely to catch that &mdash; a command that exits 0 while the broker silently drops the message, a TLS call that
+      does nothing because it ran a line too late, a rate limiter that looks broken because the test was sequential.
+      Curiosity about <em>why</em> something passed is the skill this internship is really teaching.</p></div>
+  </div>
+</section>
+<section class="sec">
+  <div class="sechead"><div class="rule"></div><p class="snum">02</p><h2>Running the sandbox</h2></div>
+  <div class="stack">
+    <p class="lede">No Docker, no containers. You install five ordinary programs, then start four of them
+    in four terminals. Copy the commands exactly &mdash; there is nothing to figure out here.</p>
+
+    <div class="stack">
+      <h3>Step 1 &mdash; install the pieces <span style="color:#8e8b82;font-weight:400">(once)</span></h3>
+      <p>You need <strong>Python 3.10+</strong>, <strong>Node.js 18+</strong>, and three small background
+      services: an MQTT broker, Redis and PostgreSQL.</p>
+      <p style="font-size:9pt"><strong>Ubuntu, Debian or WSL</strong></p>
+      <pre>sudo apt update
+sudo apt install -y python3 python3-venv python3-pip \
+                    mosquitto mosquitto-clients redis-server postgresql
+
+<span class="c"># Ubuntu starts mosquitto and Redis immediately, on 1883 and 6379 — the</span>
+<span class="c"># ports the full cloud-robotics platform needs. Turn them off; you will</span>
+<span class="c"># start your own, on different ports, below.</span>
+sudo systemctl stop mosquitto redis-server
+sudo systemctl disable mosquitto redis-server
+
+<span class="c"># Postgres is worth leaving running, but move it off 5432 first.</span>
+sudo sed -i 's/^port = 5432/port = 5433/' /etc/postgresql/*/main/postgresql.conf
+sudo systemctl restart postgresql
+pg_lsclusters                  <span class="c"># the port column should read 5433</span></pre>
+      <p style="font-size:9pt"><strong>macOS</strong>, with Homebrew</p>
+      <pre>brew install python node mosquitto redis postgresql@16
+
+<span class="c"># Postgres on 5433, so it cannot collide with the main platform</span>
+echo "port = 5433" &gt;&gt; $(brew --prefix)/var/postgresql@16/postgresql.conf
+brew services start postgresql@16
+
+<span class="c"># do NOT "brew services start" mosquitto or redis — you start those yourself</span></pre>
+      <p><strong>Windows:</strong> install WSL2 and follow the Ubuntu steps inside it. Running these services
+      natively on Windows is possible but fiddly, and nothing in these exercises needs it.</p>
+    </div>
+
+    <div class="stack">
+      <h3>Step 2 &mdash; create the database <span style="color:#8e8b82;font-weight:400">(once)</span></h3>
+      <pre>sudo -u postgres psql -p 5433 -c "CREATE USER robotstore WITH PASSWORD 'robotstore';"
+sudo -u postgres psql -p 5433 -c "CREATE DATABASE robotstore OWNER robotstore;"
+
+<span class="c"># on macOS, drop the "sudo -u postgres" — Homebrew's Postgres runs as you:</span>
+<span class="c">#   psql -p 5433 postgres -c "CREATE USER robotstore WITH PASSWORD 'robotstore';"</span></pre>
+      <p>You never create the tables yourself. The backend does that the first time it starts.</p>
+    </div>
+
+    <div class="stack">
+      <h3>Step 3 &mdash; install this project's dependencies <span style="color:#8e8b82;font-weight:400">(once)</span></h3>
+      <pre>cd secure_robotstore
+
+<span class="c"># Python: one virtual environment shared by the backend and the agent</span>
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r cloud/backend/requirements.txt -r robot-agent/requirements.txt
+
+<span class="c"># JavaScript: the frontend</span>
+cd cloud/frontend &amp;&amp; npm install &amp;&amp; cd ../..</pre>
+      <p>A <em>virtual environment</em> is a private folder of Python packages belonging to this project alone,
+      so installing something here cannot break anything else on your machine.
+      <code>source .venv/bin/activate</code> is what switches a terminal into it &mdash; you will do that in two
+      of the four terminals below, every time you open them.</p>
+    </div>
+
+    <div class="stack">
+      <h3>Step 4 &mdash; start it, five terminals</h3>
+      <p>Open five terminals, all in the <code>secure_robotstore</code> directory. Leave each running; each
+      prints its own log, which is most of how you will debug things.</p>
+      <div class="tw"><table>
+        <tr><th style="width:74px">Terminal</th><th>Command</th></tr>
+        <tr><td><strong>1</strong><br><span style="color:#8e8b82">broker</span></td>
+            <td><code>mosquitto -c mosquitto/mosquitto.local.conf -v</code></td></tr>
+        <tr><td><strong>2</strong><br><span style="color:#8e8b82">redis</span></td>
+            <td><code>redis-server --port 6380</code></td></tr>
+        <tr><td><strong>3</strong><br><span style="color:#8e8b82">backend</span></td>
+            <td><code>source .venv/bin/activate</code><br><code>source local.env</code><br>
+                <code>cd cloud/backend</code><br><code>uvicorn app.main:app --reload --port 8001</code></td></tr>
+        <tr><td><strong>4</strong><br><span style="color:#8e8b82">agent</span></td>
+            <td><code>source .venv/bin/activate</code><br><code>source local.env</code><br>
+                <code>cd robot-agent</code><br><code>python -m agent.main</code></td></tr>
+        <tr><td><strong>5</strong><br><span style="color:#8e8b82">frontend</span></td>
+            <td><code>cd cloud/frontend</code><br>
+                <code>VITE_API_URL=http://localhost:8001 npm run dev -- --port 3001</code></td></tr>
+      </table></div>
+      <p>Then open <strong>http://localhost:3001</strong> and sign in with <code>operator</code> /
+      <code>demo1234</code>. Both windows should start filling at one row per second. Postgres is already
+      running in the background as a system service, which is why it gets no terminal of its own.</p>
+      <p><code>source local.env</code> does something small but essential: the backend and the agent default to
+      the hostnames <code>mosquitto</code>, <code>postgres</code> and <code>redis</code>, which only exist inside
+      a Docker network. That file points them at <code>localhost</code> instead.</p>
+    </div>
+
+    <div class="stack">
+      <h3>Where everything is</h3>
+      <div class="tw"><table>
+        <tr><th>Service</th><th>Address</th><th>Notes</th></tr>
+        <tr><td>Frontend</td><td><code>http://localhost:3001</code></td><td>login + Remote Data</td></tr>
+        <tr><td>Backend API</td><td><code>http://localhost:8001</code></td><td><code>/docs</code> for the OpenAPI page</td></tr>
+        <tr><td>Backend WS</td><td><code>ws://localhost:8001/ws/string_api</code></td><td>and <code>/ws/int_api</code></td></tr>
+        <tr><td>Agent health</td><td><code>http://localhost:8081</code></td><td><code>{"mqtt_connected": true}</code></td></tr>
+        <tr><td>MQTT broker</td><td><code>localhost:1884</code></td><td>anonymous, for now</td></tr>
+        <tr><td>PostgreSQL</td><td><code>localhost:5433</code></td><td><code>robotstore</code> / <code>robotstore</code></td></tr>
+        <tr><td>Redis</td><td><code>localhost:6380</code></td><td>no password</td></tr>
+      </table></div>
+      <p>Every one of those sits <strong>one above</strong> the full cloud-robotics platform's port
+      (1883 / 6379 / 5432 / 8000 / 3000 / 8080), so the sandbox and the real platform can run on one machine
+      at the same time. Nothing you install for this sandbox should ever listen on the platform's numbers &mdash;
+      if the platform suddenly refuses to start, that is almost always what has happened.</p>
+    </div>
+
+    <div class="stack">
+      <h3>If something does not work</h3>
+      <div class="tw"><table>
+        <tr><th style="width:34%">Symptom</th><th>What it means</th></tr>
+        <tr><td><code>connection refused</code> on port 1884</td><td>Terminal 1 is not running.</td></tr>
+        <tr><td>The <strong>main platform</strong> fails with <code>failed to bind host port 127.0.0.1:1883</code></td><td>Ubuntu's auto-started mosquitto or redis service is holding it. <code>sudo systemctl stop mosquitto redis-server</code>, then <code>disable</code> them. This sandbox never uses 1883 or 6379.</td></tr>
+        <tr><td>Backend log repeats <code>lost the broker connection (rc=7)</code></td><td>Two MQTT clients are using the same client id and kicking each other off. You are running the stack twice &mdash; check for an old terminal.</td></tr>
+        <tr><td><code>password authentication failed</code></td><td>Step 2 did not run, or ran against a different Postgres. Re-run it.</td></tr>
+        <tr><td><code>Peer authentication failed</code></td><td>You connected over the local socket instead of TCP. Add <code>-h localhost</code> to the <code>psql</code> command.</td></tr>
+        <tr><td><code>ModuleNotFoundError: fastapi</code></td><td>That terminal is not in the virtual environment. Run <code>source .venv/bin/activate</code> first.</td></tr>
+        <tr><td>Both windows stay empty</td><td>Terminal 2 or 3 is not running. <code>curl localhost:8001/health/detail</code> names the broken dependency.</td></tr>
+      </table></div>
+    </div>
+
+    <div class="note"><h4>Restarting after a change</h4>
+      <p>There is no build step and no rebuild. Edit a Python file and the backend reloads itself
+      (<code>--reload</code>); edit a React file and the browser updates. Only two things need a manual restart:
+      the broker, after you edit <code>mosquitto/mosquitto.local.conf</code> &mdash; Ctrl-C in terminal 1 and run
+      it again &mdash; and the agent, which has no reloader. That immediacy is the reason this runs without
+      containers: the loop from &ldquo;edit a config&rdquo; to &ldquo;watch the attack fail&rdquo; is a few seconds.</p></div>
+  </div>
+</section>
+<section class="sec">
+  <div class="sechead"><div class="rule"></div><p class="snum">03</p><h2>Architecture overview</h2></div>
+  <div class="stack">
+    <p class="lede">One device publishes a string and an integer every second. Everything else in this system exists
+    to move those two numbers safely to a browser &mdash; and it is the <em>safely</em> that is missing.</p>
+    <figure><div class="figbox"><svg viewBox="0 0 700 456" role="img" class="dg"><defs><marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#8e8b82"/></marker><marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#a9583e"/></marker><marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2f7d69"/></marker><marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#9a6a15"/></marker><marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#b23a35"/></marker><marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2d6597"/></marker></defs><text x="6" y="16" text-anchor="start" class="dl" font-size="9.5" fill="#a9583e">THE SANDBOX, END TO END</text><rect x="6" y="30" width="196" height="156" rx="5" fill="#fbf3e2" stroke="#9a6a15" stroke-width="1.4"/><text x="17" y="48" class="dt" font-size="11">robot-agent  ·  terminal 3</text><text x="17" y="66" class="dm" font-size="9.5">publisher.py</text><text x="17" y="80" class="dm" font-size="9.5">  1 string + 1 int, every second</text><text x="17" y="94" class="dm" font-size="9.5">  drift-corrected · seq++</text><text x="17" y="108" class="dm" font-size="9.5">mqtt_client.py</text><text x="17" y="122" class="dm" font-size="9.5">  paho · QoS 0 · re-subscribes</text><text x="17" y="136" class="dm" font-size="9.5">health_server.py  :8081</text><rect x="238" y="62" width="150" height="78" rx="5" fill="#eaf1f7" stroke="#2d6597" stroke-width="1.4"/><text x="313.0" y="98.0" text-anchor="middle" class="dt" font-size="12">mosquitto</text><text x="313.0" y="114.0" text-anchor="middle" class="ds" font-size="10">terminal 1  &#183;  :1884</text><rect x="238" y="160" width="150" height="82" rx="5" fill="#faf8f4" stroke="#ded6c9" stroke-width="1.4"/><text x="249" y="178" class="dt" font-size="11">TOPICS</text><text x="249" y="196" class="dm" font-size="8.6">devices/{id}/string</text><text x="249" y="210" class="dm" font-size="8.6">devices/{id}/int</text><text x="249" y="224" class="dm" font-size="8.6">devices/{id}/cmd</text><text x="249" y="238" class="dm" font-size="8.6">backend subs: +/string</text><rect x="424" y="30" width="270" height="156" rx="5" fill="#eaf1f7" stroke="#2d6597" stroke-width="1.4"/><text x="435" y="48" class="dt" font-size="11">cloud/backend  ·  terminal 2  ·  :8001</text><text x="435" y="66" class="dm" font-size="8.8">mqtt/service.py   only broker toucher</text><text x="435" y="80" class="dm" font-size="8.8">store.py   ReadingStore + Hub</text><text x="435" y="94" class="dm" font-size="8.8">ws/stream.py   two live sockets</text><text x="435" y="108" class="dm" font-size="8.8">api/   auth · data · health</text><text x="435" y="122" class="dm" font-size="8.8">main.py   lifespan &#8594; app.state</text><rect x="424" y="222" width="128" height="74" rx="5" fill="#e9f4f0" stroke="#2f7d69" stroke-width="1.4"/><text x="488.0" y="256.0" text-anchor="middle" class="dt" font-size="12">Redis  :6380</text><text x="488.0" y="272.0" text-anchor="middle" class="ds" font-size="8.6">latest:{kind}</text><text x="488" y="286" text-anchor="middle" class="dm" font-size="8.2">history ring, 50</text><rect x="566" y="222" width="128" height="74" rx="5" fill="#e9f4f0" stroke="#2f7d69" stroke-width="1.4"/><text x="630.0" y="256.0" text-anchor="middle" class="dt" font-size="11">PostgreSQL  :5433</text><text x="630.0" y="272.0" text-anchor="middle" class="ds" font-size="8.6">string_readings</text><text x="630" y="286" text-anchor="middle" class="dm" font-size="8.2">int_readings</text><rect x="424" y="332" width="270" height="96" rx="5" fill="#f9efe9" stroke="#a9583e" stroke-width="1.4"/><text x="435" y="350" class="dt" font-size="11">browser  ·  terminal 4  ·  :3001</text><text x="435" y="368" class="dm" font-size="8.8">LoginPage.tsx   operator / demo1234</text><text x="435" y="382" class="dm" font-size="8.8">RemoteDataPage.tsx   two windows</text><text x="435" y="396" class="dm" font-size="8.8">useReadingSocket.ts   &#215;2, backoff,</text><text x="435" y="410" class="dm" font-size="8.8">   detects gaps in seq</text><path d="M 204 100 L 234 100" fill="none" stroke="#9a6a15" stroke-width="1.6" marker-end="url(#aw)"/><text x="219" y="90" text-anchor="middle" class="dl" font-size="8.2" fill="#9a6a15">1 Hz</text><path d="M 390 100 L 420 100" fill="none" stroke="#2d6597" stroke-width="1.6" marker-end="url(#ac)"/><text x="405" y="84" text-anchor="middle" class="dl" font-size="8.2" fill="#2d6597">subscribes</text><text x="405" y="94" text-anchor="middle" class="dl" font-size="8.2" fill="#2d6597">+/string</text><path d="M 488 190 L 488 218" fill="none" stroke="#2f7d69" stroke-width="1.6" marker-end="url(#ao)"/><text x="494" y="208" text-anchor="start" class="dl" font-size="8.4" fill="#2f7d69">SET / LPUSH</text><path d="M 630 190 L 630 218" fill="none" stroke="#2f7d69" stroke-width="1.6" marker-end="url(#ao)"/><text x="636" y="208" text-anchor="start" class="dl" font-size="8.4" fill="#2f7d69">INSERT</text><path d="M 424 170 L 404 170 L 404 380 L 424 380" fill="none" stroke="#a9583e" stroke-width="1.6" marker-end="url(#aa)"/><text x="396" y="262" text-anchor="end" class="dl" font-size="8.6" fill="#a9583e">WS: backfill,</text><text x="396" y="274" text-anchor="end" class="dl" font-size="8.6" fill="#a9583e">then live frames</text><text x="6" y="448" text-anchor="start" class="ds" font-size="8.6">five terminals you start yourself, plus Postgres as a background service &#183; every port sits one above the main platform's, so both run at once &#183; 1884 / 6380 / 5433 / 8001 / 3001 / 8081</text></svg></div><figcaption><b>One device, two data types, about 1,200 lines.</b> Four processes you start by hand, plus two background services. The architecture is the real one, not a toy: the same MQTT-only device boundary, the same Redis/Postgres split, the same &ldquo;one service owns the broker connection&rdquo; rule, and the same paho-thread-to-asyncio hand-off. What is missing is every security control &mdash; that is what the twelve exercises put back.</figcaption></figure>
+    <div class="stack">
+      <h3>The three design decisions worth understanding first</h3>
+      <p><strong>MQTT is the only road in.</strong> Every byte between the device and the cloud crosses the broker
+      &mdash; readings northbound, commands southbound. That is the single most valuable security property the
+      architecture has, because it means there is exactly one place to enforce who may say what. Exercises 1, 2, 7 and 9
+      are all spent on that one place.</p>
+      <p><strong>Two stores, split by a single question.</strong> Postgres is the system of record &mdash; losing a row
+      would be a bug. Redis holds what is live and re-derivable: the latest value (another is one second away) and a
+      50&#8209;item ring buffer that populates a browser which has just connected. The test to apply to any new piece of
+      data is <em>would losing this on restart be a bug?</em> Yes goes to Postgres; no goes to Redis.</p>
+      <p><strong>One module owns the broker connection.</strong> <code>mqtt/service.py</code> is the only backend module
+      that imports paho; everything else reaches the device through it. That is why the WebSocket layer never touches
+      MQTT and the MQTT layer never touches Postgres &mdash; and it is why adding TLS and credentials later touches one
+      file rather than five.</p>
+      <p>One mechanic to know before changing any of it: paho runs its network loop on its own background thread, so its
+      callbacks do <em>not</em> fire on the asyncio event loop. Anything a callback needs to do that touches async state
+      is handed back across that boundary with <code>run_coroutine_threadsafe</code>. Calling an async handler directly
+      from a paho callback is the classic bug here.</p>
+    </div>
+  </div>
+</section>
+<section class="task">
+  <div class="task-h"><span class="tid">01</span><h2>MQTT authentication</h2></div>
+  <div class="stack">
+    <figure><div class="figbox"><svg viewBox="0 0 700 226" role="img" class="dg"><defs><marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#8e8b82"/></marker><marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#a9583e"/></marker><marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2f7d69"/></marker><marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#9a6a15"/></marker><marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#b23a35"/></marker><marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2d6597"/></marker></defs><text x="6" y="14" text-anchor="start" class="dl" font-size="9.5" fill="#b23a35">WHO MAY CONNECT TO THE BROKER?</text><rect x="6" y="32" width="152" height="44" rx="5" fill="#fbf3e2" stroke="#9a6a15" stroke-width="1.4"/><text x="82.0" y="51.0" text-anchor="middle" class="dt" font-size="12">robot-agent</text><text x="82.0" y="67.0" text-anchor="middle" class="ds" font-size="8.6">legitimate</text><rect x="6" y="88" width="152" height="44" rx="5" fill="#eaf1f7" stroke="#2d6597" stroke-width="1.4"/><text x="82.0" y="107.0" text-anchor="middle" class="dt" font-size="12">backend</text><text x="82.0" y="123.0" text-anchor="middle" class="ds" font-size="8.6">legitimate</text><rect x="6" y="144" width="152" height="44" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="82.0" y="163.0" text-anchor="middle" class="dt" font-size="12">ATTACKER</text><text x="82.0" y="179.0" text-anchor="middle" class="ds" font-size="8.6">no credential at all</text><path d="M 232 22 L 232 74" stroke="#b23a35" stroke-width="2" stroke-dasharray="4 4" fill="none"/><path d="M 232 140 L 232 186" stroke="#b23a35" stroke-width="2" stroke-dasharray="4 4" fill="none"/><text x="232" y="206" text-anchor="middle" class="dbad" font-size="11">NO DOOR</text><text x="232" y="219" text-anchor="middle" class="dbad" font-size="8.4">allow_anonymous true</text><path d="M 160 54 L 300 106" fill="none" stroke="#9a6a15" stroke-width="1.6" marker-end="url(#aw)"/><path d="M 160 110 L 300 106" fill="none" stroke="#2d6597" stroke-width="1.6" marker-end="url(#ac)"/><path d="M 160 166 L 300 106" fill="none" stroke="#b23a35" stroke-width="1.6" marker-end="url(#ab)"/><rect x="302" y="74" width="140" height="64" rx="5" fill="#eaf1f7" stroke="#2d6597" stroke-width="1.4"/><text x="372.0" y="103.0" text-anchor="middle" class="dt" font-size="12">mosquitto</text><text x="372.0" y="119.0" text-anchor="middle" class="ds" font-size="8.6">no password file</text><rect x="478" y="36" width="216" height="140" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="489" y="54" class="dt" font-size="11">&#8230; and therefore</text><text x="489" y="72" class="dbad" font-size="8.6">forged reading &#8594; Redis</text><text x="489" y="86" class="dbad" font-size="8.6">forged reading &#8594; Postgres, forever</text><text x="489" y="100" class="dbad" font-size="8.6">pushed to every open browser</text><text x="489" y="114" class="dbad" font-size="8.6">every topic readable by anyone</text><text x="489" y="128" class="dbad" font-size="8.6">commands publishable to any device</text><path d="M 444 106 L 474 106" fill="none" stroke="#b23a35" stroke-width="1.6" marker-end="url(#ab)"/></svg></div><figcaption><b>Exercise 1.</b> The broker asks nobody who they are. An attacker who can reach port 1884 is, as far as the system is concerned, exactly as trusted as the robot. Authentication is the foundation everything else rests on: an access-control list cannot scope a client to its own topics if the broker cannot tell clients apart.</figcaption></figure>
+    <div class="fld"><h5>What is wrong</h5><p><code>mosquitto/mosquitto.conf</code> sets <code>allow_anonymous true</code>. Any client that can open a TCP connection to the broker is a trusted client, and there are no credentials anywhere in this stack to check.</p></div>
+    <div class="fld"><h5>Prove it first</h5><pre>mosquitto_pub -h localhost -p 1884 -t devices/demo-device-01/int \
+    -m '{"value":999,"seq":999999}'
+
+<span class="c"># no credential was offered — and it is now in the system of record</span>
+psql -h localhost -p 5433 -U robotstore -d robotstore \
+  -c "SELECT * FROM int_readings WHERE seq = 999999;"</pre></div>
+    <div class="fld"><h5>Done looks like</h5><ul class="dw"><li>Anonymous publish and subscribe are both refused by the broker.</li><li>The agent and the backend hold <em>separate</em> credentials, and both still work.</li><li>No password appears in any committed file or anywhere in git history.</li><li>A wrong credential produces a clear log line rather than silence.</li></ul></div>
+    <div class="fld"><h5>Verify the fix</h5><pre><span class="c"># must now fail</span>
+mosquitto_pub -h localhost -p 1884 -t devices/demo-device-01/int -m '{"value":1}'
+
+<span class="c"># must still be true — the real clients are unaffected</span>
+curl -s localhost:8001/health/detail | python3 -m json.tool
+curl -s localhost:8081</pre></div>
+    <div class="ref"><p><b>Watch for</b> &nbsp;paho retries forever in the background, so a wrong password looks like silence rather than an error. Read the broker log.</p><p><b>Compare against</b> &nbsp;<code>cloud-container/mosquitto/</code> — note how <code>docker-entrypoint-wrapper.sh</code> generates the password file at container start so no plaintext ever enters git.</p></div>
+  </div>
+</section><section class="task">
+  <div class="task-h"><span class="tid">02</span><h2>MQTT topic ACLs</h2></div>
+  <div class="stack">
+    <figure><div class="figbox"><svg viewBox="0 0 700 216" role="img" class="dg"><defs><marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#8e8b82"/></marker><marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#a9583e"/></marker><marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2f7d69"/></marker><marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#9a6a15"/></marker><marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#b23a35"/></marker><marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2d6597"/></marker></defs><text x="6" y="14" text-anchor="start" class="dl" font-size="9.5" fill="#b23a35">WHO MAY WRITE WHICH TOPIC?</text><rect x="6" y="58" width="132" height="76" rx="5" fill="#fbf3e2" stroke="#9a6a15" stroke-width="1.4"/><text x="72.0" y="93.0" text-anchor="middle" class="dt" font-size="12">robot-agent</text><text x="72.0" y="109.0" text-anchor="middle" class="ds" font-size="8.6">authenticated</text><rect x="562" y="58" width="132" height="76" rx="5" fill="#eaf1f7" stroke="#2d6597" stroke-width="1.4"/><text x="628.0" y="93.0" text-anchor="middle" class="dt" font-size="12">backend</text><text x="628.0" y="109.0" text-anchor="middle" class="ds" font-size="8.6">authenticated</text><path d="M 142 78 L 556 78" fill="none" stroke="#2f7d69" stroke-width="1.6" marker-end="url(#ao)"/><text x="350" y="70" text-anchor="middle" class="dl" font-size="8.8" fill="#2f7d69">devices/{id}/string &#183; int   &#8212;   robot should be the only writer</text><path d="M 556 118 L 142 118" fill="none" stroke="#a9583e" stroke-width="1.6" marker-end="url(#aa)"/><text x="350" y="110" text-anchor="middle" class="dl" font-size="8.8" fill="#a9583e">devices/{id}/cmd   &#8212;   backend should be the only writer</text><path d="M 300 132 L 300 160" stroke="#b23a35" stroke-width="1.6" stroke-dasharray="4 3" fill="none" marker-end="url(#ab)"/><path d="M 400 92 L 400 160" stroke="#b23a35" stroke-width="1.6" stroke-dasharray="4 3" fill="none" marker-end="url(#ab)"/><rect x="250" y="162" width="200" height="42" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="350.0" y="180.0" text-anchor="middle" class="dt" font-size="10.5">ANY authenticated client</text><text x="350.0" y="196.0" text-anchor="middle" class="ds" font-size="8.6">writes both directions</text><rect x="6" y="150" width="220" height="54" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="17" y="170" class="dbad" font-size="8.6">backend can forge telemetry</text><text x="17" y="184" class="dbad" font-size="8.6">device can issue its own commands</text><rect x="474" y="150" width="220" height="54" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="485" y="170" class="dbad" font-size="8.6">one stolen device key</text><text x="485" y="184" class="dbad" font-size="8.6">  reaches every other device</text></svg></div><figcaption><b>Exercise 2.</b> Authentication proves <em>who</em>; it says nothing about <em>what they may do</em>. Without an ACL every authenticated client can write every topic &mdash; so a compromised backend can fabricate a robot's own self-reported state, and anything holding the device credential can command the whole fleet. Direction is the security property here.</figcaption></figure>
+    <div class="fld"><h5>What is wrong</h5><p>With no <code>acl_file</code>, every authenticated client may publish and subscribe to everything. A compromised backend can forge device telemetry, and anything holding the agent's credential can publish commands back to the device.</p></div>
+    <div class="fld"><h5>Prove it first</h5><pre><span class="c"># with exercise 1 done, connect as the BACKEND and publish device telemetry.</span>
+<span class="c"># it succeeds — and it should not: the backend has no business claiming to be a device.</span>
+mosquitto_pub -h localhost -p 1884 -u backend -P "$MQTT_BACKEND_PASSWORD" \
+    -t devices/demo-device-01/string -m '{"value":"forged","seq":1}'</pre></div>
+    <div class="fld"><h5>Done looks like</h5><ul class="dw"><li>The backend identity cannot publish telemetry, status or health.</li><li>The device identity cannot publish to the command topic.</li><li>Neither identity can subscribe to a topic outside its role.</li><li>Real telemetry and real commands both still flow.</li></ul></div>
+    <div class="fld"><h5>Verify the fix</h5><pre><span class="c"># both of these must now be refused</span>
+mosquitto_pub -h localhost -p 1884 -u backend -P "$MQTT_BACKEND_PASSWORD" \
+  -t devices/demo-device-01/string -m '{"value":"forged"}'
+mosquitto_pub -h localhost -p 1884 -u demo-device-01 -P "$MQTT_DEVICE_PASSWORD" \
+  -t devices/demo-device-01/cmd -m '{"action":"drive"}'</pre></div>
+    <div class="ref"><p><b>Steal this trick</b> &nbsp;Use a <code>pattern</code> rule with <code>%u</code> so each device is scoped to its own namespace automatically. Onboarding device #2 then means issuing a credential, not editing the ACL file.</p><p><b>Compare against</b> &nbsp;<code>cloud-container/mosquitto/aclfile</code></p></div>
+  </div>
+</section><section class="task">
+  <div class="task-h"><span class="tid">03</span><h2>Real credential checking</h2></div>
+  <div class="stack">
+    <figure><div class="figbox"><svg viewBox="0 0 700 196" role="img" class="dg"><defs><marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#8e8b82"/></marker><marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#a9583e"/></marker><marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2f7d69"/></marker><marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#9a6a15"/></marker><marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#b23a35"/></marker><marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2d6597"/></marker></defs><text x="6" y="14" text-anchor="start" class="dl" font-size="9.5" fill="#b23a35">TWO WAYS THE LOGIN HELPS AN ATTACKER</text><rect x="6" y="66" width="128" height="56" rx="5" fill="#faf8f4" stroke="#ded6c9" stroke-width="1.4"/><text x="70.0" y="98.0" text-anchor="middle" class="dt" font-size="10">POST /auth/login</text><path d="M 138 94 L 172 94" fill="none" stroke="#8e8b82" stroke-width="1.6" marker-end="url(#af)"/><rect x="174" y="52" width="176" height="84" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="185" y="70" class="dt" font-size="10">_USERS = { &#8230; }</text><text x="185" y="88" class="dbad" font-size="8.6">&quot;operator&quot;: &quot;demo1234&quot;</text><text x="185" y="102" class="dbad" font-size="8.6">&quot;viewer&quot;:  &quot;demo1234&quot;</text><text x="185" y="116" class="dm" font-size="8.6"></text><text x="185" y="130" class="dm" font-size="8.6">stored in plain text</text><path d="M 352 76 L 390 44" fill="none" stroke="#b23a35" stroke-width="1.6" marker-end="url(#ab)"/><path d="M 352 112 L 390 144" fill="none" stroke="#b23a35" stroke-width="1.6" marker-end="url(#ab)"/><rect x="392" y="22" width="190" height="44" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="487.0" y="41.0" text-anchor="middle" class="dt" font-size="10.5">&quot;No such user.&quot;</text><text x="487.0" y="57.0" text-anchor="middle" class="ds" font-size="8.4">username does not exist</text><rect x="392" y="122" width="190" height="44" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="487.0" y="141.0" text-anchor="middle" class="dt" font-size="10.5">&quot;Wrong password.&quot;</text><text x="487.0" y="157.0" text-anchor="middle" class="ds" font-size="8.4">username DOES exist</text><text x="596" y="40" text-anchor="start" class="dbad" font-size="9">free user</text><text x="596" y="52" text-anchor="start" class="dbad" font-size="9">enumeration</text><text x="596" y="140" text-anchor="start" class="dbad" font-size="9">and  ==  returns</text><text x="596" y="152" text-anchor="start" class="dbad" font-size="9">early, so timing</text><text x="596" y="164" text-anchor="start" class="dbad" font-size="9">leaks it too</text><text x="6" y="186" text-anchor="start" class="ds" font-size="8.8">Fix both, or fixing one only moves the leak: identical messages still differ in how long they take to produce.</text></svg></div><figcaption><b>Exercise 3.</b> The endpoint answers a question it was never asked &mdash; &ldquo;does this account exist?&rdquo; &mdash; before any password is tried. Passwords are then compared with <code>==</code>, which stops at the first wrong character, so response timing carries the same information even after the messages are made identical.</figcaption></figure>
+    <div class="fld"><h5>What is wrong</h5><p><code>cloud/backend/app/api/auth.py</code> holds a dictionary of plaintext passwords in source, compares them with <code>==</code>, and returns a different error for &ldquo;no such user&rdquo; than for &ldquo;wrong password&rdquo;.</p></div>
+    <div class="fld"><h5>Prove it first</h5><pre>curl -s -X POST localhost:8001/auth/login -H 'Content-Type: application/json' \
+  -d '{"username":"operator","password":"wrong"}'   <span class="c"># "Wrong password."</span>
+curl -s -X POST localhost:8001/auth/login -H 'Content-Type: application/json' \
+  -d '{"username":"nobody","password":"wrong"}'     <span class="c"># "No such user."</span></pre></div>
+    <div class="fld"><h5>Done looks like</h5><ul class="dw"><li>Both failing requests return byte-identical responses.</li><li>Passwords are stored hashed with bcrypt or argon2 — never a bare SHA.</li><li>The comparison is constant-time, on <em>both</em> fields.</li><li>A failure costs the same work when the user does not exist, so the timing leak does not return through the skipped hash.</li></ul></div>
+    <div class="fld"><h5>Verify the fix</h5><pre><span class="c"># identical bodies…</span>
+for u in operator nobody; do
+  curl -s -X POST localhost:8001/auth/login -H 'Content-Type: application/json' \
+    -d "{\"username\":\"$u\",\"password\":\"x\"}"; echo
+done
+
+<span class="c"># …and indistinguishable timing</span>
+for u in operator nobody; do
+  curl -s -o /dev/null -w "$u %{time_total}\n" -X POST localhost:8001/auth/login \
+    -H 'Content-Type: application/json' -d "{\"username\":\"$u\",\"password\":\"x\"}"
+done</pre></div>
+    <div class="ref"><p><b>A caveat on the target</b> &nbsp;The reference file checks one configured credential rather than a users table; its own docstring calls a table with hashed passwords the natural extension. Either is a legitimate answer here.</p><p><b>Compare against</b> &nbsp;<code>cloud-container/backend/app/auth/service.py</code></p></div>
+  </div>
+</section><section class="task">
+  <div class="task-h"><span class="tid">04</span><h2>Real tokens</h2></div>
+  <div class="stack">
+    <figure><div class="figbox"><svg viewBox="0 0 700 200" role="img" class="dg"><defs><marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#8e8b82"/></marker><marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#a9583e"/></marker><marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2f7d69"/></marker><marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#9a6a15"/></marker><marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#b23a35"/></marker><marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2d6597"/></marker></defs><text x="6" y="14" text-anchor="start" class="dl" font-size="9.5" fill="#b23a35">WHAT THE TOKEN ACTUALLY IS</text><rect x="6" y="44" width="250" height="52" rx="5" fill="#faf8f4" stroke="#ded6c9" stroke-width="1.4"/><text x="131.0" y="74.0" text-anchor="middle" class="dm" font-size="11">b3BlcmF0b3I6ZGVtbw==</text><text x="131" y="110" text-anchor="middle" class="ds" font-size="8.6">issued by the server on login</text><path d="M 260 70 L 316 70" fill="none" stroke="#b23a35" stroke-width="1.6" marker-end="url(#ab)"/><text x="288.0" y="62.0" text-anchor="middle" class="dl" font-size="9.5" fill="#b23a35">base64</text><rect x="320" y="44" width="190" height="52" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="415.0" y="74.0" text-anchor="middle" class="dm" font-size="12">operator:demo</text><text x="415" y="110" text-anchor="middle" class="dbad" font-size="8.6">&#8230; that is the whole secret</text><rect x="528" y="34" width="166" height="74" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="539" y="54" class="dbad" font-size="9.2">no signature</text><text x="539" y="68" class="dbad" font-size="9.2">no expiry</text><text x="539" y="82" class="dbad" font-size="9.2">never validated</text><rect x="6" y="140" width="504" height="46" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="258.0" y="167.0" text-anchor="middle" class="dm" font-size="9.2">python3 -c &quot;import base64; print(base64.b64encode(b'operator:demo').decode())&quot;</text><text x="528" y="160" text-anchor="start" class="dbad" font-size="9">anyone can mint</text><text x="528" y="172" text-anchor="start" class="dbad" font-size="9">an operator session</text></svg></div><figcaption><b>Exercise 4.</b> This is not a token, it is a username in a costume &mdash; reversible by anyone, forgeable in one line, and valid forever because nothing in it says when it should stop being. A signature makes it unforgeable; an expiry bounds the damage of a stolen one; a unique id is what later makes revocation possible at all.</figcaption></figure>
+    <div class="fld"><h5>What is wrong</h5><p>The token is <code>base64(username + ":demo")</code>. It is not signed, so anyone can mint one, and it carries no expiry, so it is valid forever.</p></div>
+    <div class="fld"><h5>Prove it first</h5><pre>python3 -c "import base64; print(base64.b64encode(b'operator:demo').decode())"
+
+<span class="c"># that is the exact string the server issues — you just minted an</span>
+<span class="c"># operator session without touching the server</span></pre></div>
+    <div class="fld"><h5>Done looks like</h5><ul class="dw"><li>A token with a tampered payload is rejected.</li><li>A token past its <code>exp</code> is rejected, without a restart.</li><li>Signing and verification are pure functions, unit-testable without starting the app.</li><li>The signing secret comes from the environment, and the app refuses to start on a known default.</li></ul></div>
+    <div class="fld"><h5>Verify the fix</h5><pre><span class="c"># pair this with exercise 5 — until a route validates, nothing here is observable</span>
+curl -s -o /dev/null -w "%{http_code}\n" localhost:8001/api/int/latest \
+  -H "Authorization: Bearer $FORGED"      <span class="c"># expect 401</span></pre></div>
+    <div class="ref"><p><b>Go one step further</b> &nbsp;Add a <code>jti</code> claim and a Redis revocation list. A JWT is stateless and so cannot be cancelled before it expires; <code>jti</code> is the handle that makes logout actually invalidate a session.</p><p><b>Compare against</b> &nbsp;<code>cloud-container/backend/app/auth/tokens.py</code></p></div>
+  </div>
+</section><section class="task">
+  <div class="task-h"><span class="tid">05</span><h2>Protecting the endpoints</h2></div>
+  <div class="stack">
+    <figure><div class="figbox"><svg viewBox="0 0 700 208" role="img" class="dg"><defs><marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#8e8b82"/></marker><marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#a9583e"/></marker><marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2f7d69"/></marker><marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#9a6a15"/></marker><marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#b23a35"/></marker><marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2d6597"/></marker></defs><text x="6" y="14" text-anchor="start" class="dl" font-size="9.5" fill="#b23a35">THE GUARD IS IN THE WRONG PLACE</text><rect x="6" y="34" width="132" height="52" rx="5" fill="#f9efe9" stroke="#a9583e" stroke-width="1.4"/><text x="72.0" y="57.0" text-anchor="middle" class="dt" font-size="12">Browser</text><text x="72.0" y="73.0" text-anchor="middle" class="ds" font-size="8.6">signed out</text><path d="M 142 60 L 196 60" fill="none" stroke="#a9583e" stroke-width="1.6" marker-end="url(#aa)"/><rect x="200" y="32" width="150" height="56" rx="5" fill="#fbf3e2" stroke="#9a6a15" stroke-width="1.4"/><text x="275.0" y="57.0" text-anchor="middle" class="dm" font-size="10.5">&lt;RequireAuth&gt;</text><text x="275.0" y="73.0" text-anchor="middle" class="ds" font-size="8.4">App.tsx route guard</text><path d="M 354 60 L 408 60" fill="none" stroke="#9a6a15" stroke-width="1.6" marker-end="url(#aw)"/><text x="381.0" y="53.0" text-anchor="middle" class="dl" font-size="9.5" fill="#9a6a15">redirect</text><rect x="412" y="34" width="140" height="52" rx="5" fill="#e9f4f0" stroke="#2f7d69" stroke-width="1.4"/><text x="482.0" y="57.0" text-anchor="middle" class="dt" font-size="12">login screen</text><text x="482.0" y="73.0" text-anchor="middle" class="ds" font-size="8.6">UI hidden &#10003;</text><path d="M 6 104 L 694 104" stroke="#ded6c9" stroke-width="1" stroke-dasharray="3 3" fill="none"/><rect x="6" y="126" width="132" height="52" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="72.0" y="149.0" text-anchor="middle" class="dt" font-size="12">curl / wscat</text><text x="72.0" y="165.0" text-anchor="middle" class="ds" font-size="8.6">no browser at all</text><path d="M 142 152 L 470 152" stroke="#b23a35" stroke-width="2.2" fill="none" marker-end="url(#ab)"/><text x="300" y="144" text-anchor="middle" class="dl" font-size="9" fill="#b23a35">straight past it &#8212; nothing to bypass, there is no server-side check</text><rect x="474" y="126" width="220" height="52" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="584.0" y="149.0" text-anchor="middle" class="dm" font-size="11">/api/&#8230;  and  /ws/&#8230;</text><text x="584.0" y="165.0" text-anchor="middle" class="ds" font-size="8.6">200 OK &#183; full data</text><text x="6" y="198" text-anchor="start" class="ds" font-size="8.8">A route guard is a user-interface convenience. Authorisation is a decision only the server can make.</text></svg></div><figcaption><b>Exercise 5 &mdash; the one that matters most.</b> Exercises 3 and 4 are worth nothing without this: a perfectly hashed password and a perfectly signed token protect nothing if no endpoint ever checks the result. Note the WebSocket half is genuinely harder &mdash; a browser cannot set headers on the handshake, so a short-lived single-use ticket travels in the URL instead of the real token.</figcaption></figure>
+    <div class="fld"><h5>What is wrong</h5><p>Nothing checks the token. Every REST route in <code>api/data.py</code> and both WebSockets in <code>ws/stream.py</code> serve anyone. The route guard in <code>App.tsx</code> hides the interface and protects nothing. <strong>Exercises 3 and 4 are worth nothing on their own</strong> &mdash; a perfect token nobody validates is still a perfect token nobody validates.</p></div>
+    <div class="fld"><h5>Prove it first</h5><pre>curl -s -o /dev/null -w "history -> %{http_code}\n" localhost:8001/api/string/history
+
+python3 - &lt;&lt;'PY'
+import asyncio, websockets
+async def main():
+    async with websockets.connect("ws://localhost:8001/ws/int_api") as ws:
+        print("connected with no token:", (await ws.recv())[:60])
+asyncio.run(main())
+PY</pre></div>
+    <div class="fld"><h5>Done looks like</h5><ul class="dw"><li>Every REST route returns 401 without a valid token.</li><li>Both WebSocket upgrades are refused before <code>accept()</code>, not after.</li><li>A ticket cannot be used twice, and expires on its own.</li><li>The browser still works end to end: log in, both windows live.</li></ul></div>
+    <div class="fld"><h5>Verify the fix</h5><pre><span class="c"># both must fail before a token and succeed after</span>
+curl -s -o /dev/null -w "%{http_code}\n" localhost:8001/api/string/history
+<span class="c"># and the same ticket must be rejected the second time it is used</span></pre></div>
+    <div class="ref"><p><b>The real constraint</b> &nbsp;Browsers cannot set custom headers on a WebSocket handshake, so <em>something</em> must travel in the URL. A token there ends up in proxy and access logs — so issue a 15-second single-use ticket instead, consumed atomically with <code>GETDEL</code>.</p><p><b>Compare against</b> &nbsp;<code>cloud-container/backend/app/auth/dependencies.py</code></p></div>
+  </div>
+</section><section class="task">
+  <div class="task-h"><span class="tid">06</span><h2>Login rate limiting</h2></div>
+  <div class="stack">
+    <figure><div class="figbox"><svg viewBox="0 0 700 170" role="img" class="dg"><defs><marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#8e8b82"/></marker><marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#a9583e"/></marker><marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2f7d69"/></marker><marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#9a6a15"/></marker><marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#b23a35"/></marker><marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2d6597"/></marker></defs><text x="6" y="14" text-anchor="start" class="dl" font-size="9.5" fill="#b23a35">GUESSING COSTS THE ATTACKER NOTHING</text><rect x="6" y="48" width="140" height="74" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="76.0" y="82.0" text-anchor="middle" class="dt" font-size="12">attacker</text><text x="76.0" y="98.0" text-anchor="middle" class="ds" font-size="8.6">one script</text><path d="M 150 50 L 300 50" stroke="#b23a35" stroke-width="1" opacity="0.75"/><path d="M 150 62 L 300 62" stroke="#b23a35" stroke-width="1" opacity="0.75"/><path d="M 150 74 L 300 74" stroke="#b23a35" stroke-width="1" opacity="0.75"/><path d="M 150 86 L 300 86" stroke="#b23a35" stroke-width="1" opacity="0.75"/><path d="M 150 98 L 300 98" stroke="#b23a35" stroke-width="1" opacity="0.75"/><path d="M 150 110 L 300 110" stroke="#b23a35" stroke-width="1" opacity="0.75"/><path d="M 150 122 L 300 122" stroke="#b23a35" stroke-width="1" opacity="0.75"/><path d="M 150 134 L 300 134" stroke="#b23a35" stroke-width="1" opacity="0.75"/><path d="M 150 146 L 300 146" stroke="#b23a35" stroke-width="1" opacity="0.75"/><text x="226" y="40" text-anchor="middle" class="dl" font-size="8.8" fill="#b23a35">200 attempts / second</text><rect x="304" y="48" width="150" height="74" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="379.0" y="82.0" text-anchor="middle" class="dm" font-size="11">/auth/login</text><text x="379.0" y="98.0" text-anchor="middle" class="ds" font-size="8.4">no counter, no lockout</text><rect x="470" y="34" width="224" height="102" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="481" y="52" class="dt" font-size="11">after 60 seconds</text><text x="481" y="70" class="dbad" font-size="9">attempts  12,000</text><text x="481" y="84" class="dbad" font-size="9">blocked        0</text><text x="481" y="98" class="dbad" font-size="9">logged         0</text><text x="481" y="112" class="dok" font-size="9">lockout should start at ~5</text><text x="6" y="158" text-anchor="start" class="ds" font-size="8.8">One shared operator credential means brute force <em>is</em> the attack surface a login endpoint has to defend.</text></svg></div><figcaption><b>Exercise 6.</b> A fixed window is the right amount of machinery here &mdash; this is one account being guessed at, not traffic shaping across millions of users. Choosing the simpler correct mechanism is part of the lesson. Watch the side effect: a rate limiter makes a test suite non-idempotent, which is how finding F9 was born.</figcaption></figure>
+    <div class="fld"><h5>What is wrong</h5><p><code>/auth/login</code> can be tried as fast as the network allows. There is no counter, no lockout and no record.</p></div>
+    <div class="fld"><h5>Prove it first</h5><pre>time for i in $(seq 1 200); do
+  curl -s -o /dev/null -X POST localhost:8001/auth/login \
+    -H 'Content-Type: application/json' \
+    -d '{"username":"operator","password":"guess'"$i"'"}'
+done</pre></div>
+    <div class="fld"><h5>Done looks like</h5><ul class="dw"><li>Repeated failures trigger a lockout that expires on its own.</li><li>A correct password during the lockout is <em>also</em> refused — and you can explain why that is correct.</li><li>A successful login clears both keys.</li><li>The existing test suite passes, or the reason it changed is written down.</li></ul></div>
+    <div class="fld"><h5>Verify the fix</h5><pre>for i in $(seq 1 30); do
+  curl -s -o /dev/null -w "%{http_code} " -X POST localhost:8001/auth/login \
+    -H 'Content-Type: application/json' \
+    -d "{\"username\":\"operator\",\"password\":\"guess$i\"}"
+done; echo
+<span class="c"># expect 401s, then 429s from the threshold onward</span></pre></div>
+    <div class="ref"><p><b>Choose the numbers deliberately</b> &nbsp;Consider a classroom of thirty students mistyping passwords behind one NAT address. Write down your reasoning for the threshold and the durations.</p><p><b>Watch for</b> &nbsp;A rate limiter makes a test suite non-idempotent — that was finding F9, caused by this exact fix.</p></div>
+  </div>
+</section><section class="task">
+  <div class="task-h"><span class="tid">07</span><h2>Input size limits</h2></div>
+  <div class="stack">
+    <figure><div class="figbox"><svg viewBox="0 0 700 200" role="img" class="dg"><defs><marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#8e8b82"/></marker><marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#a9583e"/></marker><marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2f7d69"/></marker><marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#9a6a15"/></marker><marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#b23a35"/></marker><marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2d6597"/></marker></defs><text x="6" y="14" text-anchor="start" class="dl" font-size="9.5" fill="#b23a35">ONE BIG MESSAGE STOPS EVERYONE</text><rect x="6" y="40" width="124" height="56" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="68.0" y="65.0" text-anchor="middle" class="dt" font-size="12">attacker</text><text x="68.0" y="81.0" text-anchor="middle" class="ds" font-size="8.6">5 MB payload</text><path d="M 134 68 L 176 68" fill="none" stroke="#b23a35" stroke-width="1.6" marker-end="url(#ab)"/><rect x="180" y="40" width="130" height="56" rx="5" fill="#eaf1f7" stroke="#2d6597" stroke-width="1.4"/><text x="245.0" y="65.0" text-anchor="middle" class="dt" font-size="12">mosquitto</text><text x="245.0" y="81.0" text-anchor="middle" class="ds" font-size="8.6">no size limit</text><path d="M 314 68 L 356 68" fill="none" stroke="#b23a35" stroke-width="1.6" marker-end="url(#ab)"/><rect x="360" y="34" width="200" height="68" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="460.0" y="65.0" text-anchor="middle" class="dm" font-size="11">json.loads(payload)</text><text x="460.0" y="81.0" text-anchor="middle" class="ds" font-size="8.6">on the ONE event loop</text><rect x="6" y="118" width="554" height="72" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="17" y="136" class="dt" font-size="9.5">everything queued behind it, for as long as the parse takes</text><text x="17" y="154" class="dbad" font-size="8.8">browser 1 &#183; frozen      browser 2 &#183; frozen      browser 3 &#183; frozen</text><text x="17" y="168" class="dbad" font-size="8.8">every other robot's telemetry &#183; waiting</text><text x="17" y="182" class="dbad" font-size="8.8">health checks &#183; waiting  &#8594;  the container may be restarted under you</text><path d="M 460 106 L 460 114" fill="none" stroke="#b23a35" stroke-width="1.6" marker-end="url(#ab)"/><rect x="576" y="34" width="118" height="156" rx="5" fill="#e9f4f0" stroke="#2f7d69" stroke-width="1.4"/><text x="587" y="52" class="dt" font-size="9.5">cap it at</text><text x="587" y="70" class="dok" font-size="8.6">the broker</text><text x="587" y="84" class="dok" font-size="8.6"> before json.loads</text><text x="587" y="98" class="dok" font-size="8.6"> the value length</text><text x="587" y="112" class="dm" font-size="8.6"></text><text x="587" y="126" class="dm" font-size="8.6">three layers,</text><text x="587" y="140" class="dm" font-size="8.6">each catching</text><text x="587" y="154" class="dm" font-size="8.6">what the others</text><text x="587" y="168" class="dm" font-size="8.6">cannot</text></svg></div><figcaption><b>Exercise 7.</b> The backend parses every inbound message on the single asyncio event loop that serves every WebSocket client in the system. Derive the limit from the largest legitimate message rather than picking a round number &mdash; and verify by <em>delivery</em>, because <code>mosquitto_pub</code> exits 0 even when the broker silently drops the message.</figcaption></figure>
+    <div class="fld"><h5>What is wrong</h5><p>Two places accept unbounded input: <code>mqtt/service.py</code> calls <code>json.loads()</code> on whatever arrives with no size check, and <code>store.py</code> writes a string reading of any length to Postgres, Redis and every open browser. <code>mosquitto.conf</code> sets no <code>message_size_limit</code> either.</p></div>
+    <div class="fld"><h5>Prove it first</h5><pre>python3 -c "print('{\"value\":\"' + 'A'*5000000 + '\",\"seq\":424242}')" &gt; /tmp/huge.json
+mosquitto_pub -h localhost -p 1884 -t devices/demo-device-01/string -f /tmp/huge.json
+
+<span class="c"># watch the UI while that lands — the parse runs on the single event</span>
+<span class="c"># loop serving every WebSocket client, so one message stalls everyone</span></pre></div>
+    <div class="fld"><h5>Done looks like</h5><ul class="dw"><li>An oversized publish is dropped and never reaches Postgres.</li><li>Normal readings keep flowing throughout the attack.</li><li>Limits exist at all three layers: broker, pre-parse byte cap, and value length.</li><li>A test covers the exact boundary, and another asserts the ceiling itself stays sane.</li></ul></div>
+    <div class="fld"><h5>Verify the fix</h5><pre><span class="c"># verify by DELIVERY — mosquitto_pub exits 0 even when the broker drops it</span>
+psql -h localhost -p 5433 -U robotstore -d robotstore \
+  -c "SELECT count(*) FROM string_readings WHERE seq = 424242;"   <span class="c"># must be 0</span>
+curl -s localhost:8001/health/detail    <span class="c"># backend still healthy</span></pre></div>
+    <div class="ref"><p><b>Derive, do not guess</b> &nbsp;Work the limit out from the largest legitimate message. The main repo's comment reasons from a LiDAR scan (~8 KB) and an SDP offer (~6 KB) to a 256 KB ceiling.</p><p><b>Compare against</b> &nbsp;<code>cloud-container/backend/app/mqtt/service.py</code> and the <code>message_size_limit</code> block in <code>cloud-container/mosquitto/mosquitto.conf</code></p></div>
+  </div>
+</section><section class="task">
+  <div class="task-h"><span class="tid">08</span><h2>CORS and security headers</h2></div>
+  <div class="stack">
+    <figure><div class="figbox"><svg viewBox="0 0 700 192" role="img" class="dg"><defs><marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#8e8b82"/></marker><marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#a9583e"/></marker><marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2f7d69"/></marker><marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#9a6a15"/></marker><marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#b23a35"/></marker><marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2d6597"/></marker></defs><text x="6" y="14" text-anchor="start" class="dl" font-size="9.5" fill="#b23a35">ANY SITE A SIGNED-IN STUDENT VISITS</text><rect x="6" y="40" width="168" height="76" rx="5" fill="#f9efe9" stroke="#a9583e" stroke-width="1.4"/><text x="90.0" y="75.0" text-anchor="middle" class="dt" font-size="12">student's browser</text><text x="90.0" y="91.0" text-anchor="middle" class="ds" font-size="8.6">signed in to our console</text><rect x="196" y="40" width="150" height="76" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="271.0" y="75.0" text-anchor="middle" class="dt" font-size="12">evil.example</text><text x="271.0" y="91.0" text-anchor="middle" class="ds" font-size="8.6">a page in another tab</text><path d="M 178 78 L 192 78" fill="none" stroke="#8e8b82" stroke-width="1.6" marker-end="url(#af)"/><path d="M 350 62 L 440 62" fill="none" stroke="#b23a35" stroke-width="1.6" marker-end="url(#ab)"/><text x="395.0" y="55.0" text-anchor="middle" class="dl" font-size="9.5" fill="#b23a35">fetch()</text><rect x="444" y="30" width="168" height="56" rx="5" fill="#eaf1f7" stroke="#2d6597" stroke-width="1.4"/><text x="528.0" y="55.0" text-anchor="middle" class="dt" font-size="12">our API</text><text x="528.0" y="71.0" text-anchor="middle" class="ds" font-size="8.6">Origin: evil.example</text><path d="M 440 104 L 350 104" fill="none" stroke="#b23a35" stroke-width="1.6" marker-end="url(#ab)"/><text x="395.0" y="97.0" text-anchor="middle" class="dl" font-size="9.5" fill="#b23a35">200 + data</text><rect x="444" y="96" width="250" height="66" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="455" y="114" class="dt" font-size="9.5">response says</text><text x="455" y="132" class="dbad" font-size="8.6">Access-Control-Allow-Origin: *</text><text x="455" y="146" class="dbad" font-size="8.6">  (no other security header at all)</text><text x="6" y="182" text-anchor="start" class="ds" font-size="8.8">The headers that are missing &mdash; nosniff, frame-deny, CSP, referrer, no-store on the login response &mdash; are each cheap, which is why skipping them is hard to justify later.</text></svg></div><figcaption><b>Exercise 8.</b> A wildcard origin means the browser will hand our API's responses to any page the student happens to have open. Add an explicit allowlist &mdash; and for each header you add, write one sentence saying what attack it stops. If you cannot, do not add it: unexplained headers are cargo cult, not security.</figcaption></figure>
+    <div class="fld"><h5>What is wrong</h5><p><code>CORS_ALLOWED_ORIGINS</code> is <code>"*"</code>, so any site a signed-in user visits can call this API from their browser. Neither the API nor nginx sets a single security header.</p></div>
+    <div class="fld"><h5>Prove it first</h5><pre>curl -sI localhost:8001/health | grep -iE 'x-frame|x-content|content-security|referrer' \
+  || echo "no security headers at all"
+curl -s -o /dev/null -w "%{http_code}\n" -H "Origin: https://evil.example" \
+  localhost:8001/api/int/latest</pre></div>
+    <div class="fld"><h5>Done looks like</h5><ul class="dw"><li>The <code>evil.example</code> origin is refused; <code>http://localhost:3001</code> still works.</li><li>Headers are present on both the API and the frontend host.</li><li>Login responses carry <code>Cache-Control: no-store</code>.</li><li>A one-line justification exists for every header you added.</li></ul></div>
+    <div class="fld"><h5>Verify the fix</h5><pre>curl -sI localhost:8001/health | grep -iE 'x-frame|x-content|content-security|permissions'
+curl -sI localhost:3001/       | grep -iE 'x-frame|x-content|content-security'</pre></div>
+    <div class="ref"><p><b>Know what each one does</b> &nbsp;Never combine a wildcard origin with credentialed requests — find out what browsers do with that combination and why.</p><p><b>Compare against</b> &nbsp;<code>cloud-container/backend/app/security_headers.py</code>, <code>cloud-container/frontend/nginx.conf</code></p></div>
+  </div>
+</section><section class="task">
+  <div class="task-h"><span class="tid">09</span><h2>TLS everywhere</h2></div>
+  <div class="stack">
+    <figure><div class="figbox"><svg viewBox="0 0 700 226" role="img" class="dg"><defs><marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#8e8b82"/></marker><marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#a9583e"/></marker><marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2f7d69"/></marker><marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#9a6a15"/></marker><marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#b23a35"/></marker><marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2d6597"/></marker></defs><text x="6" y="14" text-anchor="start" class="dl" font-size="9.5" fill="#b23a35">WHAT A LAPTOP ON THE SAME WI-FI SEES</text><rect x="6" y="56" width="140" height="60" rx="5" fill="#fbf3e2" stroke="#9a6a15" stroke-width="1.4"/><text x="76.0" y="90.0" text-anchor="middle" class="dt" font-size="12">robot-agent</text><rect x="554" y="56" width="140" height="60" rx="5" fill="#eaf1f7" stroke="#2d6597" stroke-width="1.4"/><text x="624.0" y="90.0" text-anchor="middle" class="dt" font-size="12">mosquitto</text><path d="M 150 86 L 550 86" stroke="#8e8b82" stroke-width="2.4" fill="none"/><text x="350" y="78" text-anchor="middle" class="dl" font-size="9" fill="#8e8b82">port 1884 &#183; plain TCP, no TLS</text><path d="M 350 90 L 350 120" stroke="#b23a35" stroke-width="1.6" stroke-dasharray="4 3" fill="none" marker-end="url(#ab)"/><rect x="196" y="124" width="308" height="76" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="207" y="142" class="dt" font-size="9.5">tcpdump &#183; anyone on the network</text><text x="207" y="160" class="dbad" font-size="8.6">username: demo-device-01</text><text x="207" y="174" class="dbad" font-size="8.6">password: &lt;the fleet password&gt;</text><text x="207" y="188" class="dbad" font-size="8.6">devices/demo-device-01/int {&quot;value&quot;:47&#8230;}</text><text x="6" y="216" text-anchor="start" class="ds" font-size="8.8">Exercise 1 gave every client a password. Without exercise 9 that password crosses the room in clear text on every reconnect &#8212; and exercise 1 is undone.</text></svg></div><figcaption><b>Exercise 9.</b> Encryption and authentication are not alternatives; either one without the other is a false sense of security. The trap in this task is mechanical rather than conceptual: paho applies TLS when the socket is created, so calling <code>tls_set()</code> after <code>connect_async()</code> silently does nothing and you get a plaintext connection that looks perfectly healthy.</figcaption></figure>
+    <div class="fld"><h5>What is wrong</h5><p>Every hop is plaintext: MQTT on 1884, Postgres, Redis, and HTTP at the edge. Exercise 2 already proved the broker half &mdash; and once exercise 1 is done, an eavesdropper reads the <em>credentials</em> off the wire on every connect.</p></div>
+    <div class="fld"><h5>Prove it first</h5><pre>mosquitto_sub -h localhost -p 1884 -t 'devices/#' -v
+
+<span class="c"># or, from anywhere on the network path:</span>
+sudo tcpdump -i any -A -c 40 'port 1884' | grep 'devices/'</pre></div>
+    <div class="fld"><h5>Done looks like</h5><ul class="dw"><li>Both clients connect over 8883; the plaintext listener is closed or restricted.</li><li>A packet capture on the TLS port shows no readable topic names or payloads.</li><li>An untrusted certificate is rejected, with a log line saying so — never silently downgraded.</li><li>The port and TLS mode are configuration, not code.</li></ul></div>
+    <div class="fld"><h5>Verify the fix</h5><pre>sudo tcpdump -i any -A -c 40 'port 1884' | grep -c 'devices/'
+sudo tcpdump -i any -A -c 40 'port 8883' | grep -c 'devices/'    <span class="c"># expect 0</span></pre></div>
+    <div class="ref"><p><b>The mechanical trap</b> &nbsp;paho applies TLS when the socket is created, so <code>tls_set()</code> must be called <em>before</em> <code>connect_async()</code>. Call it after and it silently does nothing.</p><p><b>Compare against</b> &nbsp;<code>scripts/generate-dev-certs.sh</code>, and the <code>mqtt_tls_*</code> settings in <code>cloud-container/backend/app/config.py</code></p></div>
+  </div>
+</section><section class="task">
+  <div class="task-h"><span class="tid">10</span><h2>Service hardening</h2></div>
+  <div class="stack">
+    <figure><div class="figbox"><svg viewBox="0 0 700 210" role="img" class="dg"><defs><marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#8e8b82"/></marker><marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#a9583e"/></marker><marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2f7d69"/></marker><marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#9a6a15"/></marker><marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#b23a35"/></marker><marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2d6597"/></marker></defs><text x="6" y="14" text-anchor="start" class="dl" font-size="9.5" fill="#b23a35">HOW BIG IS THE BLAST RADIUS?</text><rect x="6" y="34" width="140" height="62" rx="5" fill="#eaf1f7" stroke="#2d6597" stroke-width="1.4"/><text x="76.0" y="62.0" text-anchor="middle" class="dt" font-size="12">backend</text><text x="76.0" y="78.0" text-anchor="middle" class="ds" font-size="8.6">runs as YOUR account</text><text x="76" y="110" text-anchor="middle" class="dbad" font-size="8.4">no memory limit</text><text x="76" y="122" text-anchor="middle" class="dbad" font-size="8.4">config world-readable</text><rect x="158" y="34" width="140" height="62" rx="5" fill="#fbf3e2" stroke="#9a6a15" stroke-width="1.4"/><text x="228.0" y="62.0" text-anchor="middle" class="dt" font-size="12">mosquitto</text><text x="228.0" y="78.0" text-anchor="middle" class="ds" font-size="8.6">runs as YOUR account</text><text x="228" y="110" text-anchor="middle" class="dbad" font-size="8.4">no memory limit</text><text x="228" y="122" text-anchor="middle" class="dbad" font-size="8.4">config world-readable</text><rect x="310" y="34" width="140" height="62" rx="5" fill="#e9f4f0" stroke="#2f7d69" stroke-width="1.4"/><text x="380.0" y="62.0" text-anchor="middle" class="dt" font-size="12">postgres</text><text x="380.0" y="78.0" text-anchor="middle" class="ds" font-size="8.6">runs as YOUR account</text><text x="380" y="110" text-anchor="middle" class="dbad" font-size="8.4">no memory limit</text><text x="380" y="122" text-anchor="middle" class="dbad" font-size="8.4">config world-readable</text><rect x="478" y="34" width="216" height="100" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="489" y="52" class="dt" font-size="9.5">published on 0.0.0.0</text><text x="489" y="70" class="dbad" font-size="8.8">5433 &#8594; postgres</text><text x="489" y="84" class="dbad" font-size="8.8">6380 &#8594; redis</text><text x="489" y="98" class="dbad" font-size="8.8">1884 &#8594; mosquitto</text><text x="489" y="112" class="dok" font-size="8.8">only 8001 and 3001 need to be</text><rect x="6" y="148" width="200" height="50" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="106.0" y="177.0" text-anchor="middle" class="dt" font-size="9.6">a laptop elsewhere on the network</text><path d="M 210 173 L 470 173" fill="none" stroke="#b23a35" stroke-width="1.6" marker-end="url(#ab)"/><text x="340.0" y="166.0" text-anchor="middle" class="dl" font-size="9.5" fill="#b23a35">psql -h &lt;your-ip&gt; -U robotstore</text><rect x="474" y="148" width="220" height="50" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="584.0" y="170.0" text-anchor="middle" class="dt" font-size="10.5">your database</text><text x="584.0" y="186.0" text-anchor="middle" class="ds" font-size="8.4">no VPN, no firewall in the way</text></svg></div><figcaption><b>Exercise 10.</b> These controls do not stop an intrusion; they bound what an intrusion becomes. A service compromised while running as your own account &mdash; with your source, your keys and your shell history in reach, and its port open to the whole network &mdash; is a very different incident from one running as a dedicated user, memory-capped, listening only on loopback. Same principle the real stack applies with containers; here you apply it directly.</figcaption></figure>
+    <div class="fld"><h5>What is wrong</h5><p>Everything you started runs as <em>you</em> &mdash; your login account, with access to every file you own. Redis and Postgres were installed with defaults, no memory limit is set anywhere, and the broker binds every network interface rather than just loopback.</p></div>
+    <div class="fld"><h5>Prove it first</h5><pre>whoami                                 <span class="c"># the backend runs as this account</span>
+ss -tlnp | grep -E '1884|5433|6380'    <span class="c"># bound on 0.0.0.0, not 127.0.0.1</span>
+
+<span class="c"># from another machine on the same network, this reaches your database:</span>
+psql -h &lt;this-host&gt; -p 5433 -U robotstore -d robotstore</pre></div>
+    <div class="fld"><h5>Done looks like</h5><ul class="dw"><li>The broker, Redis and Postgres accept connections only from <code>127.0.0.1</code>.</li><li>No service runs as root, and none runs as an account that owns your source code.</li><li>Config files holding credentials are readable only by their owner.</li><li>A memory limit exists for each service, derived from a measurement rather than a guess.</li></ul></div>
+    <div class="fld"><h5>Verify the fix</h5><pre>ss -tlnp | grep -E '1884|5433|6380'    <span class="c"># expect 127.0.0.1, never 0.0.0.0</span>
+ps -o user=,cmd= -C mosquitto -C redis-server    <span class="c"># expect a dedicated user</span>
+ls -l mosquitto/passwordfile                     <span class="c"># expect -rw------- </span></pre></div>
+    <div class="ref"><p><b>Expect breakage</b> &nbsp;Narrowing a bind address or changing a service user usually breaks something that was quietly relying on the looser setting. Fix it properly rather than by widening the permission again.</p><p><b>The same idea, containerised</b> &nbsp;The real stack solves this with non-root <code>USER</code> directives, <code>no-new-privileges</code> and loopback-only port publishing &mdash; see the root <code>docker-compose.yml</code> and <code>cloud-container/docker/backend.Dockerfile</code>. The principles are identical; only the mechanism differs.</p></div>
+  </div>
+</section><section class="task">
+  <div class="task-h"><span class="tid">11</span><h2>Secrets</h2></div>
+  <div class="stack">
+    <figure><div class="figbox"><svg viewBox="0 0 700 208" role="img" class="dg"><defs><marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#8e8b82"/></marker><marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#a9583e"/></marker><marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2f7d69"/></marker><marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#9a6a15"/></marker><marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#b23a35"/></marker><marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2d6597"/></marker></defs><text x="6" y="14" text-anchor="start" class="dl" font-size="9.5" fill="#b23a35">EVERY DEPLOYMENT SHARES ONE PASSWORD</text><rect x="6" y="32" width="210" height="92" rx="5" fill="#faf8f4" stroke="#ded6c9" stroke-width="1.4"/><text x="17" y="50" class="dt" font-size="9.5">.env.example   (committed)</text><text x="17" y="68" class="dm" font-size="8.8">POSTGRES_USER=robotstore</text><text x="17" y="82" class="dbad" font-size="8.8">POSTGRES_PASSWORD=robotstore</text><rect x="246" y="32" width="210" height="92" rx="5" fill="#faf8f4" stroke="#ded6c9" stroke-width="1.4"/><text x="257" y="50" class="dt" font-size="9.5">.env   (in use)</text><text x="257" y="68" class="dm" font-size="8.8">POSTGRES_USER=robotstore</text><text x="257" y="82" class="dbad" font-size="8.8">POSTGRES_PASSWORD=robotstore</text><text x="231" y="84" text-anchor="middle" class="dbad" font-size="20">=</text><text x="480" y="62" text-anchor="start" class="dbad" font-size="9.4">byte for byte</text><text x="480" y="76" text-anchor="start" class="dbad" font-size="9.4">identical &#8212; the</text><text x="480" y="90" text-anchor="start" class="dbad" font-size="9.4">example file is</text><text x="480" y="104" text-anchor="start" class="dbad" font-size="9.4">the real one</text><rect x="6" y="146" width="140" height="48" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="76.0" y="167.0" text-anchor="middle" class="dt" font-size="10.5">school A</text><text x="76.0" y="183.0" text-anchor="middle" class="ds" font-size="8.4">same credentials</text><rect x="158" y="146" width="140" height="48" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="228.0" y="167.0" text-anchor="middle" class="dt" font-size="10.5">school B</text><text x="228.0" y="183.0" text-anchor="middle" class="ds" font-size="8.4">same credentials</text><rect x="310" y="146" width="140" height="48" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="380.0" y="167.0" text-anchor="middle" class="dt" font-size="10.5">school C</text><text x="380.0" y="183.0" text-anchor="middle" class="ds" font-size="8.4">same credentials</text><rect x="478" y="140" width="216" height="60" rx="5" fill="#e9f4f0" stroke="#2f7d69" stroke-width="1.4"/><text x="489" y="160" class="dok" font-size="8.6">generate per environment</text><text x="489" y="174" class="dok" font-size="8.6">refuse to boot on a default</text><text x="489" y="188" class="dok" font-size="8.6">  when ENVIRONMENT=production</text></svg></div><figcaption><b>Exercise 11.</b> The half people skip is the startup guard, and it is the half that works. A default credential which only fails at code-review time will eventually reach production, because review is a human process that misses things; one that refuses to boot cannot. Check git history too &mdash; anything already committed is exposed and must be rotated, not merely deleted.</figcaption></figure>
+    <div class="fld"><h5>What is wrong</h5><p><code>.env</code> and <code>.env.example</code> are identical, and both contain <code>POSTGRES_PASSWORD=robotstore</code>. <code>local.env</code> reuses those defaults verbatim, so every copy of this project shares credentials with every other.</p></div>
+    <div class="fld"><h5>Prove it first</h5><pre>diff .env .env.example && echo "identical — the example file IS the real one"
+
+<span class="c"># and check whether anything sensitive was ever committed</span>
+git log --all -p | grep -iE 'password|secret|api[_-]?key' | grep -v 'example'</pre></div>
+    <div class="fld"><h5>Done looks like</h5><ul class="dw"><li>A fresh checkout cannot start without generating secrets first.</li><li>A production start carrying any known default fails loudly, naming the setting.</li><li>Local development still starts with no manual steps beyond the generator.</li><li>Git history has been checked, and anything found is <em>rotated</em>, not just deleted.</li></ul></div>
+    <div class="fld"><h5>Verify the fix</h5><pre>ENVIRONMENT=production POSTGRES_PASSWORD=robotstore \
+  uvicorn app.main:app --port 8001
+<span class="c"># expect: immediate exit, naming POSTGRES_PASSWORD as an insecure default</span></pre></div>
+    <div class="ref"><p><b>The half people skip</b> &nbsp;A default that only fails at code review will eventually reach production. One that refuses to boot cannot.</p><p><b>Compare against</b> &nbsp;<code>scripts/generate-secrets.sh</code>, and <code>assert_production_safe()</code> with its <code>_INSECURE_DEFAULTS</code> set in <code>cloud-container/backend/app/config.py</code></p></div>
+  </div>
+</section><section class="task">
+  <div class="task-h"><span class="tid">12</span><h2>Audit logging</h2></div>
+  <div class="stack">
+    <figure><div class="figbox"><svg viewBox="0 0 700 226" role="img" class="dg"><defs><marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#8e8b82"/></marker><marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#a9583e"/></marker><marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2f7d69"/></marker><marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#9a6a15"/></marker><marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#b23a35"/></marker><marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><polygon points="0,0 10,5 0,10" fill="#2d6597"/></marker></defs><text x="6" y="14" text-anchor="start" class="dl" font-size="9.5" fill="#b23a35">CAN YOU PROVE THE RECORD WAS NOT EDITED?</text><text x="6" y="36" text-anchor="start" class="dl" font-size="9" fill="#b23a35">TODAY &#8212; a line in the application log</text><rect x="6" y="44" width="320" height="40" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="166.0" y="68.0" text-anchor="middle" class="dm" font-size="9.4">logger.info(&quot;login ok: operator&quot;)</text><path d="M 330 64 L 372 64" fill="none" stroke="#b23a35" stroke-width="1.6" marker-end="url(#ab)"/><text x="351.0" y="57.0" text-anchor="middle" class="dl" font-size="9.5" fill="#b23a35">edit</text><rect x="376" y="44" width="318" height="40" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="535.0" y="68.0" text-anchor="middle" class="dm" font-size="9.4">logger.info(&quot;login ok: someone-else&quot;)</text><text x="350" y="100" text-anchor="middle" class="ds" font-size="8.8">no trace, no evidence, and gone at the next log rotation anyway</text><path d="M 6 118 L 694 118" stroke="#ded6c9" stroke-width="1" stroke-dasharray="3 3" fill="none"/><text x="6" y="142" text-anchor="start" class="dl" font-size="9" fill="#2f7d69">HASH-CHAINED &#8212; every entry commits to the one before it</text><rect x="6" y="152" width="124" height="46" rx="5" fill="#e9f4f0" stroke="#2f7d69" stroke-width="1.4"/><text x="68.0" y="172.0" text-anchor="middle" class="dt" font-size="10">entry 1</text><text x="68.0" y="188.0" text-anchor="middle" class="ds" font-size="7.8">sha256(prev + row)</text><path d="M 132 175 L 144 175" fill="none" stroke="#2f7d69" stroke-width="1.6" marker-end="url(#ao)"/><rect x="146" y="152" width="124" height="46" rx="5" fill="#e9f4f0" stroke="#2f7d69" stroke-width="1.4"/><text x="208.0" y="172.0" text-anchor="middle" class="dt" font-size="10">entry 2</text><text x="208.0" y="188.0" text-anchor="middle" class="ds" font-size="7.8">sha256(prev + row)</text><path d="M 272 175 L 284 175" fill="none" stroke="#2f7d69" stroke-width="1.6" marker-end="url(#ao)"/><rect x="286" y="152" width="124" height="46" rx="5" fill="#fbecea" stroke="#b23a35" stroke-width="1.4"/><text x="348.0" y="172.0" text-anchor="middle" class="dt" font-size="10">entry 3</text><text x="348.0" y="188.0" text-anchor="middle" class="ds" font-size="7.8">sha256(prev + row)</text><path d="M 412 175 L 424 175" fill="none" stroke="#b23a35" stroke-width="1.6" marker-end="url(#ab)"/><rect x="426" y="152" width="124" height="46" rx="5" fill="#fbf3e2" stroke="#9a6a15" stroke-width="1.4"/><text x="488.0" y="172.0" text-anchor="middle" class="dt" font-size="10">entry 4</text><text x="488.0" y="188.0" text-anchor="middle" class="ds" font-size="7.8">sha256(prev + row)</text><path d="M 552 175 L 564 175" fill="none" stroke="#b23a35" stroke-width="1.6" marker-end="url(#ab)"/><rect x="566" y="152" width="124" height="46" rx="5" fill="#fbf3e2" stroke="#9a6a15" stroke-width="1.4"/><text x="628.0" y="172.0" text-anchor="middle" class="dt" font-size="10">entry 5</text><text x="628.0" y="188.0" text-anchor="middle" class="ds" font-size="7.8">sha256(prev + row)</text><text x="202" y="216" text-anchor="middle" class="dbad" font-size="8.8">edit this one &#8230;</text><text x="492" y="216" text-anchor="middle" class="dbad" font-size="8.8">&#8230; and every hash after it stops matching</text></svg></div><figcaption><b>Exercise 12.</b> After an incident involving a machine that moved, the first question is who commanded it. Chaining each entry to the hash of the previous one makes tampering detectable by recomputation alone. Two details carry the weight: canonical serialisation with sorted keys, so identical data always hashes identically, and a database advisory lock around appends, so two concurrent writers cannot both chain from the same predecessor.</figcaption></figure>
+    <div class="fld"><h5>What is wrong</h5><p>Auth events reach <code>logger.info()</code> and nothing else. That is neither durable — log rotation, a restarted container — nor tamper-evident: anyone with disk access edits it leaving no trace. For a system that drives physical hardware, &ldquo;who commanded what, when&rdquo; has to survive an incident review.</p></div>
+    <div class="fld"><h5>Prove it first</h5><pre><span class="c"># look at terminal 2, where the backend is running</span>
+grep 'login ok' &lt;whatever you scrolled past in that terminal&gt;
+
+<span class="c"># now ask: where does this live in an hour? who could have edited it?</span>
+<span class="c"># what would prove that nobody did?</span></pre></div>
+    <div class="fld"><h5>Done looks like</h5><ul class="dw"><li>Log in, log out and fail a login — all three appear, with actor, action, result and time.</li><li>The verifier passes on an untouched chain.</li><li>A single edited, deleted or reordered row is detected <em>and located</em>.</li><li>Concurrent writes do not corrupt the chain under load.</li></ul></div>
+    <div class="fld"><h5>Verify the fix</h5><pre>python3 scripts/verify-audit-log.py          <span class="c"># chain intact, N entries</span>
+
+psql -h localhost -p 5433 -U robotstore -d robotstore \
+  -c "UPDATE audit_log SET actor='someone-else' WHERE id = 5;"
+
+python3 scripts/verify-audit-log.py          <span class="c"># break detected at entry 5</span></pre></div>
+    <div class="ref"><p><b>Two details carry the weight</b> &nbsp;Canonical JSON with sorted keys, so identical data always hashes identically; and a Postgres advisory lock around appends, so two concurrent writers cannot both chain from the same predecessor.</p><p><b>Compare against</b> &nbsp;<code>cloud-container/backend/app/audit/logger.py</code></p></div>
+  </div>
+</section>
+<section class="sec">
+  <div class="sechead"><div class="rule"></div><p class="snum">04</p><h2>When you are done</h2></div>
+  <div class="stack">
+    <p class="lede">Re-run the three headline checks one final time.</p>
+    <pre>make verify-holes</pre>
+    <p>All three should now fail to demonstrate anything &mdash; the anonymous publish refused, the subscribe refused,
+    the unauthenticated API read returning 401 &mdash; while the browser at <code>http://localhost:3001</code> still
+    shows both windows ticking once a second.</p>
+    <div class="note"><h4>That combination is the actual pass condition</h4>
+      <p>Either half alone is easy. Anyone can lock a system down until it stops working, and anyone can keep a system
+      working by changing nothing. Doing both at once, and being able to prove both at once, is the entire job.</p></div>
+    <div class="stack">
+      <h3>What is deliberately still missing</h3>
+      <p>These are real limitations of the sandbox, and worth understanding before anyone builds on it. The <code>Hub</code>
+      is in-process, so two backend replicas would each only push to their own WebSocket clients &mdash; the fix is Redis
+      pub/sub between them. There are no tests; adding one for the reading path is a good first non-security task. There
+      are no migrations, only <code>CREATE TABLE IF NOT EXISTS</code>. <code>--reload</code> and bind-mounted source are
+      on for both Python services so your edits apply immediately &mdash; development settings, not production ones. And
+      Postgres grows forever at about two rows per second; retention is not handled.</p>
+      <p>None of those are security problems. Being able to tell the difference &mdash; and to say so plainly rather than
+      filing everything as a vulnerability &mdash; is part of what makes a security engineer worth listening to.</p>
+    </div>
+    <div class="foot">
+      <p><strong>The Twelve Exercises</strong> &mdash; secure_robotstore, a training mirror of the cloud-robotics
+      teleoperation platform. Companion material: <code>secure_robotstore/README.md</code>,
+      <code>docs/security-findings.md</code> (the audit these exercises draw their real findings from), and
+      <code>docs/target-architecture.md</code>.</p>
+    </div>
+  </div>
+</section>
+</body></html>

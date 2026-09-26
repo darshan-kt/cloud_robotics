@@ -1,0 +1,165 @@
+name: secure-robotstore
+
+# A deliberately insecure mirror of the main cloud-robotics stack, at about
+# a twentieth of the size. Five services, one data path:
+#
+#   agent ──MQTT──► mosquitto ──MQTT──► backend ──┬─► redis    (live)
+#                                                 ├─► postgres (durable)
+#                                                 └─► WS ─► frontend
+#
+# Every host port sits one above the main stack's, so `docker compose up`
+# here does not collide with the real system running alongside it.
+#
+# INTERN TASK (security), stack-wide:
+#   - No service has resource limits; one runaway container can starve the host.
+#   - No service sets `security_opt: [no-new-privileges:true]`.
+#   - Every container runs as root.
+#   - Ports bind 0.0.0.0, not 127.0.0.1 — so the broker and the databases
+#     are reachable from anywhere that can route to this machine. The main
+#     stack binds its broker/db ports to loopback specifically to avoid this.
+#   Compare with the root docker-compose.yml.
+
+networks:
+  secure-robotstore-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  mosquitto-data:
+
+services:
+  # --- MQTT broker: the only path between device and cloud ---
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: sr-mosquitto
+    networks: [secure-robotstore-net]
+    ports:
+      # INTERN TASK (security): 0.0.0.0 + anonymous auth. Anyone who can
+      # reach this port owns the data path in both directions.
+      - "${MQTT_HOST_PORT:-1884}:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -h localhost -p 1883 -t healthcheck -m ping -q 0 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  # --- Redis: live values + the ring buffer that backfills new WS clients ---
+  redis:
+    image: redis:7-alpine
+    container_name: sr-redis
+    networks: [secure-robotstore-net]
+    ports:
+      - "${REDIS_HOST_PORT:-6380}:6379"
+    # INTERN TASK (security): no --requirepass, and protected-mode off.
+    # Anyone who reaches this port can read and flush everything.
+    command: ["redis-server", "--protected-mode", "no", "--save", ""]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # --- Postgres: durable reading history ---
+  postgres:
+    image: postgres:16-alpine
+    container_name: sr-postgres
+    networks: [secure-robotstore-net]
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-robotstore}
+      POSTGRES_USER: ${POSTGRES_USER:-robotstore}
+      # INTERN TASK (security): a committed default password, published on
+      # 0.0.0.0, with no TLS on the connection.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-robotstore}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-robotstore}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # --- Backend: MQTT -> storage -> WebSocket ---
+  backend:
+    build:
+      context: ./cloud/backend
+    container_name: sr-backend
+    networks: [secure-robotstore-net]
+    ports:
+      - "${BACKEND_PORT:-8001}:8000"
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-robotstore}
+      POSTGRES_USER: ${POSTGRES_USER:-robotstore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-robotstore}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      DEVICE_ID: ${DEVICE_ID:-demo-device-01}
+      # INTERN TASK (security): wildcard CORS.
+      CORS_ALLOWED_ORIGINS: "*"
+    volumes:
+      # Live-reload the source while interns edit it.
+      - ./cloud/backend/app:/app/app
+    depends_on:
+      mosquitto: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  # --- Frontend: login + the two data windows ---
+  frontend:
+    build:
+      context: ./cloud/frontend
+      args:
+        # Baked in at build time, so this is the URL the BROWSER uses —
+        # localhost:8001 on the host, not the compose service name.
+        VITE_API_URL: http://localhost:${BACKEND_PORT:-8001}
+    container_name: sr-frontend
+    networks: [secure-robotstore-net]
+    ports:
+      - "${FRONTEND_PORT:-3001}:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # --- Robot agent: publishes a string + an integer every second ---
+  agent:
+    build:
+      context: ./robot-agent
+    container_name: sr-agent
+    networks: [secure-robotstore-net]
+    ports:
+      - "${AGENT_HEALTH_PORT:-8081}:8080"
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      DEVICE_ID: ${DEVICE_ID:-demo-device-01}
+      PUBLISH_INTERVAL_SECONDS: ${PUBLISH_INTERVAL_SECONDS:-1.0}
+      HEALTH_PORT: 8080
+    volumes:
+      - ./robot-agent/agent:/app/agent
+    depends_on:
+      mosquitto: {condition: service_healthy}
+    restart: unless-stopped

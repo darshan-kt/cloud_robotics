@@ -1,249 +1,262 @@
-import { useEffect, useRef, useState, type ComponentType, type MouseEvent } from "react";
-import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, OctagonX, Route, Smartphone } from "lucide-react";
-import { Header } from "../components/layout/Header";
-import { Badge, Skeleton } from "../components/ui/Layout";
+import { useEffect, useState } from "react";
+import { Battery, Cpu, OctagonX, Radio, Timer } from "lucide-react";
+import { AppShell, SpikeMark } from "../components/layout/AppShell";
+import { AppTile } from "../components/layout/SectionDeck";
+import { SECTIONS } from "../lib/appCatalog";
+import { Chip, Panel, Skeleton } from "../components/ui/Layout";
+import { EventLog } from "../components/ui/EventLog";
+import { Readout, type Provenance } from "../components/ui/Signal";
+import { useEmergencyStop } from "../hooks/useEmergencyStop";
+import { useGatewayHealth } from "../hooks/useGatewayHealth";
+import * as localDb from "../lib/localDb";
+import type { MapData, Robot, RobotSensor } from "../types";
 
-interface AppDef {
-  id: string;
-  title: string;
-  description: string;
-  icon: ComponentType<{ className?: string }>;
-  theme: "emerald" | "rose" | "purple" | "amber";
-  glow: string; // "r, g, b" for the --glow custom property
-  tag: string;
-  version: string;
-  route: string;
+// The deck — the first screen an operator sees after signing in.
+//
+// It used to be a launcher: a hue-panning "Choose your tool" headline, a
+// marquee of hardcoded strings ("ALL SYSTEMS NOMINAL", "GATEWAY: STANDBY")
+// that scrolled cheerfully while the header said NOT CONNECTED, and four
+// tiles in four different colours. The most valuable screen in the app
+// carried no information about the robot.
+//
+// Now the top half is the vehicle: who it is, and the four numbers you'd
+// want before you touch anything, each tagged with where it came from. The
+// tiles below are still the way in to each tool, but every tile reports its
+// own live state, so the deck answers "what is going on" before it asks
+// "what do you want to open".
+
+// The four control apps come from the catalog (src/lib/appCatalog.ts), which
+// also feeds the rail and the route table. This deck adds what the catalog
+// cannot know: each tool's state right now.
+const CONTROL_APPS = SECTIONS.find((sec) => sec.id === "control")!.groups[0].apps;
+
+interface DeckData {
+  robot: Robot | null;
+  sensors: RobotSensor[];
+  maps: MapData[];
+  loading: boolean;
 }
 
-const APPS: AppDef[] = [
-  {
-    id: "dashboard",
-    title: "Dashboard",
-    description: "Robot vitals, sensors, live configuration and the ROS 2 runtime, all in one console.",
-    icon: LayoutDashboard,
-    theme: "emerald",
-    glow: "0, 229, 160",
-    tag: "Core",
-    version: "v0.1.0",
-    route: "/dashboard",
-  },
-  {
-    id: "emergency-stop",
-    title: "Emergency Stop",
-    description: "One-press physical-style E-Stop with a full trigger/release history log.",
-    icon: OctagonX,
-    theme: "rose",
-    glow: "255, 77, 106",
-    tag: "Safety",
-    version: "v0.1.0",
-    route: "/emergency-stop",
-  },
-  {
-    id: "remote-controller",
-    title: "Remote Controller",
-    description: "Joystick + WASD teleop with a live LIDAR radar HUD and speed limits.",
-    icon: Smartphone,
-    theme: "purple",
-    glow: "168, 85, 247",
-    tag: "Manual",
-    version: "v0.1.0",
-    route: "/remote-controller",
-  },
-  {
-    id: "simple-route-planner",
-    title: "Simple Route Planner",
-    description: "Click-to-place waypoints on the map and dispatch a navigation route.",
-    icon: Route,
-    theme: "amber",
-    glow: "245, 158, 11",
-    tag: "Planning",
-    version: "v0.1.0",
-    route: "/simple-route-planner",
-  },
-];
+function useDeckData(): DeckData {
+  const [state, setState] = useState<DeckData>({
+    robot: null,
+    sensors: [],
+    maps: [],
+    loading: true,
+  });
 
-const TICKER_ITEMS = [
-  "ALL SYSTEMS NOMINAL",
-  "ROS 2 HUMBLE",
-  "DDS DOMAIN 0",
-  "MQTT LINK STABLE",
-  "GATEWAY: STANDBY",
-  "OPERATOR SESSION ACTIVE",
-];
-
-function useClock(): string {
-  const [time, setTime] = useState(() => new Date());
   useEffect(() => {
-    const interval = window.setInterval(() => setTime(new Date()), 1000);
-    return () => window.clearInterval(interval);
+    let cancelled = false;
+    (async () => {
+      const robot = await localDb.getRobot();
+      const [sensors, maps] = await Promise.all([localDb.getSensors(robot.id), localDb.getMaps()]);
+      if (!cancelled) setState({ robot, sensors, maps, loading: false });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
-  return time.toISOString().slice(11, 19);
-}
 
-const MOTES = Array.from({ length: 10 }, (_, i) => ({
-  left: `${(i * 37 + 5) % 100}%`,
-  top: `${(i * 53 + 12) % 100}%`,
-  delay: `${(i % 5) * 0.7}s`,
-  duration: `${6 + (i % 4)}s`,
-}));
+  return state;
+}
 
 export function AppStorePage() {
-  const clock = useClock();
+  const { robot, sensors, maps, loading } = useDeckData();
+  const gateway = useGatewayHealth();
+  const estop = useEmergencyStop();
+
+  // Provenance for the vitals row. Nothing here streams from the robot yet
+  // (see README §"Two data layers"), so these values are honestly CACHED
+  // whenever the gateway is down — never dressed up as live.
+  const vitals: Provenance = gateway.ok && gateway.robotAlive ? "live" : "cached";
+  const cachedAt = robot ? Date.parse(robot.updated_at) : null;
+
+  const offlineSensors = sensors.filter((s) => s.status === "offline").length;
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      <Header />
+    <AppShell title="Robot control">
+      <div className="mx-auto flex h-full max-w-[1200px] flex-col gap-lg">
+        {/* ---- The vehicle ------------------------------------------------ */}
+        <section className="animate-fade-up flex-none">
+          <div className="flex flex-wrap items-end justify-between gap-lg">
+            <div className="min-w-0">
+              <p className="mb-1.5 flex items-center gap-2 font-sans text-label uppercase text-muted">
+                <SpikeMark className="h-3 w-3 text-coral" />
+                Connected vehicle
+              </p>
+              {loading ? (
+                <Skeleton className="h-11 w-72" />
+              ) : (
+                <h2 className="font-display text-display-lg text-ink">{robot?.name}</h2>
+              )}
+              <p className="mt-1.5 font-mono text-caption text-faint">
+                {robot ? `${robot.model} · ${robot.serial_number} · fw ${robot.firmware_version}` : "—"}
+              </p>
+            </div>
 
-      {/* Ambient background */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-24 -top-24 h-96 w-96 animate-pulse-gentle rounded-full bg-emerald-500/20 blur-3xl" />
-        <div
-          className="absolute -bottom-24 -right-24 h-96 w-96 animate-pulse-gentle rounded-full bg-purple-500/20 blur-3xl"
-          style={{ animationDelay: "1.5s" }}
-        />
-        <div className="hub-grid-floor" />
-        {MOTES.map((mote, i) => (
-          <span
-            key={i}
-            className="absolute h-1 w-1 animate-pulse-gentle rounded-full bg-accent/60"
-            style={{ left: mote.left, top: mote.top, animationDelay: mote.delay, animationDuration: mote.duration }}
-          />
-        ))}
-      </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Chip tone={estop.isActive ? "fault" : "nominal"} icon={<OctagonX className="h-3 w-3" />}>
+                {estop.isActive ? "E-Stop engaged" : "E-Stop clear"}
+              </Chip>
+              <Chip tone={gateway.ok ? "nominal" : "caution"} icon={<Radio className="h-3 w-3" />}>
+                {gateway.ok ? "Gateway up" : "Gateway down"}
+              </Chip>
+            </div>
+          </div>
+        </section>
 
-      <main className="relative mx-auto max-w-6xl px-4 pb-20 pt-10">
-        {/* Hero */}
-        <div className="mb-10 animate-fade-up">
-          <p className="mb-3 font-mono text-xs uppercase tracking-widest text-textMuted">
-            <span className="text-accent">●</span> Mission deck · UTC {clock} · OPERATOR SESSION
-          </p>
-          <h1 className="hub-gradient-text font-mono text-3xl font-bold tracking-tight sm:text-4xl">
-            Choose your tool
-            <span className="hub-cursor text-accent">_</span>
-          </h1>
-          <p className="mt-3 max-w-xl text-sm text-textMuted">
-            Four apps, one robot. Launch a tool below to take the deck.
-          </p>
-        </div>
+        {/* ---- Vitals ------------------------------------------------------
+            Four readings, each carrying its own provenance. When the gateway
+            is down these read CACHED with an age, and `pose` reads NO SIGNAL
+            rather than inventing a coordinate. */}
+        <section className="animate-fade-up stagger-1 grid flex-none grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line shadow-panel lg:grid-cols-4">
+          <VitalCell>
+            <Readout
+              size="lg"
+              label="Battery"
+              value={robot ? robot.battery_level : null}
+              unit="%"
+              icon={<Battery className="h-3.5 w-3.5" />}
+              state={loading ? "absent" : vitals}
+              age={cachedAt}
+              tone={robot && robot.battery_level < 20 ? "caution" : "default"}
+            />
+          </VitalCell>
+          <VitalCell>
+            <Readout
+              size="lg"
+              label="Uptime"
+              value={robot ? robot.uptime_hours.toFixed(1) : null}
+              unit="h"
+              icon={<Timer className="h-3.5 w-3.5" />}
+              state={loading ? "absent" : vitals}
+              age={cachedAt}
+            />
+          </VitalCell>
+          <VitalCell>
+            <Readout
+              size="lg"
+              label="Pose"
+              // No AMCL fix without a gateway — so there is deliberately no
+              // value to show here until one exists.
+              value={gateway.ok && gateway.robotAlive ? "0.00, 0.00" : null}
+              icon={<Cpu className="h-3.5 w-3.5" />}
+              state="absent"
+            />
+          </VitalCell>
+          <VitalCell>
+            <Readout
+              size="lg"
+              label="Sensors online"
+              value={loading ? null : `${sensors.length - offlineSensors}/${sensors.length}`}
+              icon={<Radio className="h-3.5 w-3.5" />}
+              state={loading ? "absent" : "cached"}
+              age={cachedAt}
+              tone={offlineSensors > 0 ? "caution" : "nominal"}
+            />
+          </VitalCell>
+        </section>
 
-        {/* Status ticker */}
-        <div className="mb-10 overflow-hidden rounded-full border border-border/50 bg-surface/60 py-2">
-          <div className="hub-ticker-track">
-            {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
-              <span
-                key={i}
-                className="flex items-center gap-2 whitespace-nowrap px-6 font-mono text-[11px] uppercase tracking-widest text-textDim"
-              >
-                <span className="h-1 w-1 rounded-full bg-accent" />
-                {item}
-              </span>
+        {/* ---- Tools ------------------------------------------------------ */}
+        <section className="animate-fade-up stagger-2 flex flex-none flex-col gap-md">
+          <div className="flex items-baseline justify-between gap-lg">
+            <h3 className="font-sans text-label uppercase text-muted">
+              Operator tools
+            </h3>
+            <span className="font-mono text-[11px] text-faint">{CONTROL_APPS.length} installed</span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-md sm:grid-cols-2 xl:grid-cols-4">
+            {CONTROL_APPS.map((app, i) => (
+              <AppTile
+                key={app.id}
+                app={app}
+                index={i}
+                status={statusFor(app.id, {
+                  gateway: gateway.ok,
+                  estopActive: estop.isActive,
+                  offlineSensors,
+                  sensorCount: sensors.length,
+                  mapCount: maps.length,
+                  estopEvents: estop.history.length,
+                  loading,
+                })}
+              />
             ))}
           </div>
-        </div>
+        </section>
 
-        {/* App grid */}
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
-          {APPS.map((app, i) => (
-            <AppCard key={app.id} app={app} index={i} />
-          ))}
-        </div>
-      </main>
-    </div>
+        {/* ---- Recent activity ------------------------------------------
+            The deck's trailing space carries the robot's safety log rather
+            than empty canvas. */}
+        <Panel
+          title="Recent activity"
+          className="animate-fade-up stagger-3 min-h-[140px] flex-1"
+          scroll
+          action={
+            <span className="font-mono text-[11px] text-faint">
+              {estop.history.length} event{estop.history.length === 1 ? "" : "s"}
+            </span>
+          }
+        >
+          <EventLog
+            events={estop.history}
+            limit={6}
+            emptyDescription="Emergency-stop triggers and releases will appear here as they happen."
+          />
+        </Panel>
+      </div>
+    </AppShell>
   );
 }
 
-function AppCard({ app, index }: { app: AppDef; index: number }) {
-  const navigate = useNavigate();
-  const [loaded, setLoaded] = useState(false);
-  const cardRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // Purely cosmetic loading simulation, staggered per card.
-    const timer = window.setTimeout(() => setLoaded(true), 800 + index * 120);
-    return () => window.clearTimeout(timer);
-  }, [index]);
-
-  function handleMouseMove(event: MouseEvent<HTMLDivElement>) {
-    const el = cardRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    const rotateY = ((x / rect.width) - 0.5) * 10;
-    const rotateX = ((y / rect.height) - 0.5) * -10;
-    el.style.setProperty("--mx", `${x}px`);
-    el.style.setProperty("--my", `${y}px`);
-    el.style.transform = `perspective(700px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-4px)`;
-  }
-
-  function handleMouseLeave() {
-    const el = cardRef.current;
-    if (!el) return;
-    el.style.transform = "perspective(700px) rotateX(0deg) rotateY(0deg) translateY(0)";
-  }
-
-  function launch() {
-    navigate(app.route);
-  }
-
-  if (!loaded) {
-    return (
-      <div className="rounded-2xl border border-border/50 bg-surface p-5">
-        <Skeleton className="mb-4 h-10 w-10 rounded-xl" />
-        <Skeleton className="mb-2 h-4 w-2/3" />
-        <Skeleton className="mb-4 h-3 w-full" />
-        <Skeleton className="h-3 w-1/3" />
-      </div>
-    );
-  }
-
-  const Icon = app.icon;
-
+function VitalCell({ children }: { children: React.ReactNode }) {
+  // Hairline grid: cells sit on a `bg-line` parent with a 1px gap, so the
+  // dividers are the background showing through rather than eight borders
+  // that have to agree with each other.
+  // Readouts step down one size on phones so a value like "132.5 h" fits a
+  // half-width cell instead of truncating.
   return (
-    <div
-      ref={cardRef}
-      role="button"
-      tabIndex={0}
-      onClick={launch}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          launch();
-        }
-      }}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      className={`hub-card animate-fade-up stagger-${Math.min(index + 1, 5)} group relative cursor-pointer overflow-hidden rounded-2xl border border-border/50 bg-surface p-5 outline-none focus-visible:ring-2 focus-visible:ring-accent`}
-      style={{ ["--glow" as string]: app.glow }}
-    >
-      <span className="pointer-events-none absolute right-3 top-2 font-mono text-4xl font-bold text-white/5">
-        {String(index + 1).padStart(2, "0")}
-      </span>
-
-      <div className="relative flex h-full flex-col">
-        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-white/5">
-          <Icon className="h-5 w-5 text-text" />
-          <span
-            className="absolute h-1.5 w-1.5 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
-            style={{ background: `rgb(${app.glow})`, transform: "translate(14px, -14px)" }}
-          />
-        </div>
-
-        <div className="mb-1 flex items-center gap-2">
-          <h2 className="font-mono text-sm font-semibold text-text">{app.title}</h2>
-          <Badge theme={app.theme}>{app.tag}</Badge>
-        </div>
-
-        <p className="mb-4 flex-1 text-xs leading-relaxed text-textMuted">{app.description}</p>
-
-        <div className="flex items-center justify-between">
-          <span className="font-mono text-[10px] text-textDim">{app.version}</span>
-          <span className="flex items-center gap-1 font-mono text-[11px] font-medium text-text transition-transform group-hover:translate-x-0.5">
-            LAUNCH <span className="transition-transform group-hover:translate-x-1">→</span>
-          </span>
-        </div>
-      </div>
-    </div>
+    <div className="bg-surface p-md sm:p-lg max-sm:[&_.text-readout-lg]:text-readout-md">{children}</div>
   );
+}
+
+// ---- Per-tile live status -------------------------------------------------
+
+interface StatusInput {
+  gateway: boolean;
+  estopActive: boolean;
+  offlineSensors: number;
+  sensorCount: number;
+  mapCount: number;
+  estopEvents: number;
+  loading: boolean;
+}
+
+interface TileStatus {
+  state: Provenance;
+  label: string;
+}
+
+/** What each tool has to say for itself right now. */
+function statusFor(id: string, d: StatusInput): TileStatus {
+  if (d.loading) return { state: "absent", label: "CHECKING" };
+  switch (id) {
+    case "dashboard":
+      return d.offlineSensors > 0
+        ? { state: "stale", label: `${d.offlineSensors} SENSOR OFFLINE` }
+        : { state: "cached", label: `${d.sensorCount} SENSORS OK` };
+    case "remote-control":
+      return d.gateway
+        ? { state: "live", label: "READY TO DRIVE" }
+        : { state: "absent", label: "NO CONTROL LINK" };
+    case "route-planner":
+      return { state: "cached", label: `${d.mapCount} MAP${d.mapCount === 1 ? "" : "S"}` };
+    case "emergency-stop":
+      return d.estopActive
+        ? { state: "stale", label: "ENGAGED" }
+        : { state: "cached", label: `ARMED · ${d.estopEvents} EVENTS` };
+    default:
+      return { state: "absent", label: "UNKNOWN" };
+  }
 }

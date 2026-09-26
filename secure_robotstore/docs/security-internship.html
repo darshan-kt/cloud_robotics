@@ -1,0 +1,1832 @@
+<title>Hardening the Fleet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+
+  --canvas:#100f0d;
+  --surface:#181715;
+  --raised:#1f1e1b;
+  --sunken:#0b0b0a;
+  --line:#2f2c28;
+  --line-soft:#242120;
+  --ink:#faf9f5;
+  --body:#d4d0c8;
+  --muted:#a09d96;
+  --faint:#7e7b74;
+  --accent:#cc785c;
+  --accent-ink:#e09274;
+  --accent-soft:rgba(204,120,92,.13);
+  --nominal:#5db8a6;
+  --nominal-soft:rgba(93,184,166,.13);
+  --caution:#e8a55a;
+  --caution-soft:rgba(232,165,90,.13);
+  --fault:#d15b52;
+  --fault-soft:rgba(209,91,82,.13);
+  --shadow:0 1px 2px rgba(0,0,0,.4);
+}
+@media (prefers-color-scheme:light){
+  :root:not([data-theme="dark"]){
+    --canvas:#faf9f5; --surface:#f5f1e9; --raised:#efe9de; --sunken:#f0ece3;
+    --line:#e0d8cb; --line-soft:#ebe5da;
+    --ink:#141413; --body:#3d3d3a; --muted:#6c6a64; --faint:#8e8b82;
+    --accent:#cc785c; --accent-ink:#a9583e; --accent-soft:rgba(204,120,92,.12);
+    --nominal:#2f8069; --nominal-soft:rgba(47,128,105,.12);
+    --caution:#9a6a15; --caution-soft:rgba(154,106,21,.13);
+    --fault:#b23a35; --fault-soft:rgba(178,58,53,.11);
+    --shadow:0 1px 2px rgba(20,20,19,.07);
+  }
+}
+:root[data-theme="light"]{
+  --canvas:#faf9f5; --surface:#f5f1e9; --raised:#efe9de; --sunken:#f0ece3;
+  --line:#e0d8cb; --line-soft:#ebe5da;
+  --ink:#141413; --body:#3d3d3a; --muted:#6c6a64; --faint:#8e8b82;
+  --accent:#cc785c; --accent-ink:#a9583e; --accent-soft:rgba(204,120,92,.12);
+  --nominal:#2f8069; --nominal-soft:rgba(47,128,105,.12);
+  --caution:#9a6a15; --caution-soft:rgba(154,106,21,.13);
+  --fault:#b23a35; --fault-soft:rgba(178,58,53,.11);
+  --shadow:0 1px 2px rgba(20,20,19,.07);
+}
+
+*{box-sizing:border-box}
+body{background:var(--canvas);color:var(--body);font-family:var(--sans);font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{color:var(--ink);text-wrap:balance;margin:0;font-weight:600;letter-spacing:-.01em}
+p{margin:0}
+a{color:var(--accent-ink);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--accent) 35%,transparent)}
+a:hover{border-bottom-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+code{font-family:var(--mono);font-size:.87em;background:var(--raised);border:1px solid var(--line-soft);border-radius:3px;padding:.08em .34em;color:var(--ink);white-space:nowrap}
+strong{color:var(--ink);font-weight:600}
+hr{border:0;border-top:1px solid var(--line);margin:0}
+
+/* ---------- shell ---------- */
+.topbar{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--canvas) 92%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.topbar-in{max-width:1280px;margin:0 auto;padding:10px 28px;display:flex;align-items:center;gap:16px}
+.mark{display:flex;align-items:baseline;gap:9px;min-width:0}
+.mark b{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent-ink);letter-spacing:.08em;text-transform:uppercase}
+.mark span{font-size:12px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar .sp{flex:1}
+.tbtn{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--raised);border:1px solid var(--line);border-radius:4px;padding:5px 10px;cursor:pointer}
+.tbtn:hover{color:var(--ink);border-color:var(--faint)}
+
+.shell{max-width:1280px;margin:0 auto;padding:0 28px 120px;display:grid;grid-template-columns:1fr;gap:0}
+@media(min-width:1080px){.shell{grid-template-columns:212px minmax(0,1fr);gap:56px}}
+
+.rail{display:none}
+@media(min-width:1080px){
+  .rail{display:block;position:sticky;top:53px;align-self:start;max-height:calc(100vh - 53px);overflow-y:auto;padding:40px 0 60px;font-size:13px}
+}
+.rail-grp{margin-bottom:22px}
+.rail-grp h5{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:0 0 9px;font-weight:500}
+.rail a{display:block;padding:3px 0 3px 11px;border-left:2px solid var(--line);border-bottom:0;color:var(--muted);line-height:1.4;margin-bottom:1px}
+.rail a:hover{color:var(--ink);border-left-color:var(--faint)}
+
+main{min-width:0;padding-top:40px}
+section{scroll-margin-top:70px}
+.stack{display:flex;flex-direction:column;gap:20px}
+.prose{max-width:70ch}
+.prose-wide{max-width:82ch}
+
+/* ---------- type ---------- */
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--accent-ink);font-weight:500}
+.snum{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--faint);font-weight:500}
+h1{font-size:clamp(34px,5vw,50px);line-height:1.06;letter-spacing:-.025em}
+h2{font-size:clamp(25px,3vw,32px);line-height:1.18;letter-spacing:-.02em}
+h3{font-size:19px;line-height:1.3}
+h4{font-size:15px;line-height:1.4}
+.lede{font-size:19px;line-height:1.55;color:var(--muted)}
+.sechead{display:flex;flex-direction:column;gap:7px;padding-top:10px}
+.sechead .bar{width:34px;height:2px;background:var(--accent);margin-bottom:4px}
+.small{font-size:14px}
+.tiny{font-size:13px;color:var(--muted)}
+
+/* ---------- hero ---------- */
+.hero{padding:56px 0 20px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.hero .stack{gap:22px}
+.herometa{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font-family:var(--mono);font-size:11px;letter-spacing:.05em;padding:4px 9px;border-radius:3px;border:1px solid var(--line);color:var(--muted);background:var(--surface);white-space:nowrap}
+.chip.on{color:var(--accent-ink);border-color:color-mix(in srgb,var(--accent) 40%,transparent);background:var(--accent-soft)}
+
+/* ---------- blocks ---------- */
+.note{border-left:2px solid var(--accent);background:var(--accent-soft);padding:15px 18px;border-radius:0 5px 5px 0;display:flex;flex-direction:column;gap:8px}
+.note.warn{border-left-color:var(--fault);background:var(--fault-soft)}
+.note.good{border-left-color:var(--nominal);background:var(--nominal-soft)}
+.note h4{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:600}
+.note.warn h4{color:var(--fault)}
+.note.good h4{color:var(--nominal)}
+.note p{font-size:15px}
+
+pre{font-family:var(--mono);font-size:12.5px;line-height:1.7;background:var(--sunken);border:1px solid var(--line);border-radius:6px;padding:14px 16px;overflow-x:auto;margin:0;color:var(--body)}
+pre .c{color:var(--faint)}
+pre .k{color:var(--accent-ink)}
+pre .g{color:var(--nominal)}
+pre .r{color:var(--fault)}
+
+figure{margin:0;display:flex;flex-direction:column;gap:11px}
+.figbox{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:20px 18px;overflow-x:auto}
+figcaption{font-size:13.5px;color:var(--muted);max-width:76ch;line-height:1.55}
+figcaption b{color:var(--body);font-weight:600}
+.dg{display:block;width:100%;height:auto;min-width:640px}
+
+/* ---------- diagram tokens ---------- */
+.dg-box{fill:var(--raised);stroke:var(--line);stroke-width:1.4}
+.dg-box-a{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.5}
+.dg-box-n{fill:var(--nominal-soft);stroke:var(--nominal);stroke-width:1.4}
+.dg-box-f{fill:var(--fault-soft);stroke:var(--fault);stroke-width:1.4}
+.dg-box-q{fill:var(--surface);stroke:var(--line);stroke-width:1.4}
+.dg-t{fill:var(--ink);font:600 13px var(--sans)}
+.dg-st{fill:var(--muted);font:400 11px var(--sans)}
+.dg-mo{fill:var(--body);font:500 11px var(--mono)}
+.dg-mo-a{fill:var(--accent-ink);font:500 11px var(--mono)}
+.dg-mo-n{fill:var(--nominal);font:500 11px var(--mono)}
+.dg-mo-f{fill:var(--fault);font:500 11px var(--mono)}
+.dg-l{stroke:var(--faint);stroke-width:1.4;fill:none}
+.dg-l-a{stroke:var(--accent);stroke-width:1.8;fill:none}
+.dg-l-n{stroke:var(--nominal);stroke-width:1.8;fill:none}
+.dg-l-f{stroke:var(--fault);stroke-width:1.8;fill:none}
+.dg-zone{fill:none;stroke:var(--line);stroke-width:1.2;stroke-dasharray:5 4}
+.dg-bd{stroke:var(--fault);stroke-width:1.3;stroke-dasharray:4 4;fill:none}
+.dg-ah{fill:var(--faint)}
+.dg-ah-a{fill:var(--accent)}
+.dg-ah-n{fill:var(--nominal)}
+.dg-ah-f{fill:var(--fault)}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:7px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:600px}
+th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:500;padding:11px 14px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--raised)}
+td{padding:11px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top;line-height:1.5}
+tbody tr:last-child td{border-bottom:0}
+td code{white-space:nowrap}
+.nw{white-space:nowrap}
+
+.sev{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;padding:3px 7px;border-radius:3px;white-space:nowrap;display:inline-block}
+.sev.cr{background:var(--fault);color:#fff}
+.sev.hi{background:var(--fault-soft);color:var(--fault);border:1px solid color-mix(in srgb,var(--fault) 45%,transparent)}
+.sev.me{background:var(--caution-soft);color:var(--caution);border:1px solid color-mix(in srgb,var(--caution) 45%,transparent)}
+.sev.lo{background:var(--raised);color:var(--muted);border:1px solid var(--line)}
+.sev.ok{background:var(--nominal-soft);color:var(--nominal);border:1px solid color-mix(in srgb,var(--nominal) 45%,transparent)}
+
+/* ---------- cards ---------- */
+.grid2{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:720px){.grid2{grid-template-columns:1fr 1fr}}
+.grid3{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:720px){.grid3{grid-template-columns:repeat(3,1fr)}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:17px 18px;display:flex;flex-direction:column;gap:8px}
+.card h4{font-size:14.5px}
+.card p{font-size:14px;color:var(--muted)}
+.card .tag{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+
+/* ---------- task cards ---------- */
+.task{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden;box-shadow:var(--shadow)}
+.task-h{display:flex;align-items:flex-start;gap:14px;padding:15px 18px;background:var(--raised);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tid{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--canvas);background:var(--accent);padding:4px 8px;border-radius:4px;letter-spacing:.04em;flex:none}
+.task-ht{flex:1;min-width:220px;display:flex;flex-direction:column;gap:3px}
+.task-ht h3{font-size:17.5px}
+.task-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.task-b{padding:16px 18px;display:flex;flex-direction:column;gap:15px}
+.fld{display:flex;flex-direction:column;gap:6px}
+.fld>h5{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--accent-ink);margin:0;font-weight:600}
+.fld p,.fld li{font-size:14.5px}
+.fld ol,.fld ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:5px}
+.fld ol{list-style:decimal}
+.dw{list-style:none;padding-left:0;display:flex;flex-direction:column;gap:6px}
+.dw li{position:relative;padding-left:24px;font-size:14.5px}
+.dw li::before{content:"";position:absolute;left:0;top:4px;width:13px;height:13px;border:1.5px solid var(--nominal);border-radius:3px}
+.ref{font-size:13px;color:var(--faint);border-top:1px solid var(--line-soft);padding-top:11px;display:flex;flex-wrap:wrap;gap:6px 16px}
+.ref span{display:inline-flex;gap:6px;align-items:baseline}
+.ref b{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:500}
+
+.trk{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:3px;white-space:nowrap;font-weight:600}
+.trk.a{background:var(--accent-soft);color:var(--accent-ink);border:1px solid color-mix(in srgb,var(--accent) 38%,transparent)}
+.trk.b{background:var(--nominal-soft);color:var(--nominal);border:1px solid color-mix(in srgb,var(--nominal) 38%,transparent)}
+.trk.both{background:var(--raised);color:var(--muted);border:1px solid var(--line)}
+
+.tier{display:flex;align-items:center;gap:14px;padding:10px 0}
+.tier .n{font-family:var(--mono);font-size:32px;font-weight:600;color:var(--line);line-height:1;flex:none}
+.tier .t{display:flex;flex-direction:column;gap:2px}
+.tier .t h3{font-size:20px}
+.tier .t p{font-size:14px;color:var(--muted)}
+
+.kv{display:flex;flex-direction:column;gap:0;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--surface)}
+.kv>div{display:grid;grid-template-columns:1fr;gap:2px;padding:12px 16px;border-bottom:1px solid var(--line-soft)}
+@media(min-width:620px){.kv>div{grid-template-columns:170px minmax(0,1fr);gap:18px}}
+.kv>div:last-child{border-bottom:0}
+.kv dt{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding-top:3px}
+.kv dd{margin:0;font-size:14.5px}
+
+.foot{border-top:1px solid var(--line);margin-top:40px;padding-top:24px;font-size:13px;color:var(--faint);display:flex;flex-direction:column;gap:7px;max-width:76ch}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+html{scroll-behavior:smooth}
+@media print{
+  .topbar,.rail{display:none}
+  .shell{grid-template-columns:1fr;padding:0}
+  body{background:#fff;color:#111;font-size:11pt}
+  .task,.card,.tw,.figbox{break-inside:avoid;page-break-inside:avoid}
+  section{page-break-before:auto}
+}
+</style>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <div class="mark"><b>Hardening the Fleet</b><span>Security internship pack &middot; cloud-robotics</span></div>
+    <div class="sp"></div>
+    <button class="tbtn" id="themebtn" type="button">Theme</button>
+  </div>
+</div>
+
+<div class="shell">
+  <nav class="rail" aria-label="Contents">
+    <div class="rail-grp">
+      <h5>Part I &middot; Concepts</h5>
+      <a href="#s00">00 &nbsp;How to use this pack</a>
+      <a href="#s01">01 &nbsp;Five boundaries</a>
+      <a href="#s02">02 &nbsp;Not a web app</a>
+      <a href="#s03">03 &nbsp;The topic contract</a>
+      <a href="#s04">04 &nbsp;How an attacker gets in</a>
+      <a href="#s05">05 &nbsp;Defence in depth</a>
+    </div>
+    <div class="rail-grp">
+      <h5>Part II &middot; Threat model</h5>
+      <a href="#s06">06 &nbsp;What we protect</a>
+      <a href="#s07">07 &nbsp;Who we defend against</a>
+      <a href="#s08">08 &nbsp;Threat register</a>
+      <a href="#s09">09 &nbsp;Rules of engagement</a>
+    </div>
+    <div class="rail-grp">
+      <h5>Part III &middot; The work</h5>
+      <a href="#s10">10 &nbsp;Tracks &amp; tiers</a>
+      <a href="#t0">Tier 0 &nbsp;Foundation</a>
+      <a href="#t1">Tier 1 &nbsp;Transport</a>
+      <a href="#t2">Tier 2 &nbsp;Identity</a>
+      <a href="#t3">Tier 3 &nbsp;Cyber-physical</a>
+    </div>
+    <div class="rail-grp">
+      <h5>Part IV &middot; Running it</h5>
+      <a href="#s15">15 &nbsp;Cadence &amp; assessment</a>
+      <a href="#s16">16 &nbsp;Glossary</a>
+    </div>
+  </nav>
+
+  <main>
+
+  <header class="hero">
+    <div class="stack">
+      <p class="eyebrow">Internship pack &middot; 12 weeks &middot; two engineers</p>
+      <h1>Hardening the&nbsp;Fleet</h1>
+      <p class="lede prose-wide">A threat model and a graded task programme for the cloud&#8209;robotics teleoperation platform &mdash; a system where a browser in one country moves a physical machine in another. Everything here is scoped to the code in this repository, and every task ends in something you can prove.</p>
+      <div class="herometa">
+        <span class="chip on">22 tasks</span>
+        <span class="chip">Basic &rarr; standard</span>
+        <span class="chip">Sandbox: <code style="background:none;border:0;padding:0">secure_robotstore</code></span>
+        <span class="chip">Target: AWS IoT Core &middot; ECS &middot; RDS</span>
+      </div>
+    </div>
+  </header>
+
+  <section id="s00" class="stack" style="padding-top:38px">
+    <div class="sechead"><div class="bar"></div><p class="snum">00</p><h2>How to use this pack</h2></div>
+
+    <div class="prose stack">
+      <p>You are two computer&#8209;science students joining a platform that lets an operator drive a real robot over the internet. Your job for the next twelve weeks is not to write features. It is to find the ways this system can be made to do something it should not &mdash; and then to close them, one at a time, with evidence.</p>
+      <p>Read Part I before you touch anything. It is six short sections and it is the difference between applying security controls you half&#8209;understand and applying the right ones for a machine that can move.</p>
+    </div>
+
+    <h3 style="margin-top:12px">Two environments, two purposes</h3>
+    <div class="grid2">
+      <div class="card">
+        <span class="tag">Where you build</span>
+        <h4><code style="font-size:13px">secure_robotstore/</code></h4>
+        <p>A deliberately insecure miniature of the real stack &mdash; one device, two data types, about 1,200 lines. Same MQTT&#8209;only device boundary, same Redis/Postgres split, same threading model. Every hole is marked <code>INTERN TASK</code>. You will break it and fix it repeatedly. Nothing here can hurt anyone.</p>
+      </div>
+      <div class="card">
+        <span class="tag">What you are learning to protect</span>
+        <h4><code style="font-size:13px">cloud-container/</code> + <code style="font-size:13px">robot-container/</code></h4>
+        <p>The real platform. It already has JWT auth with revocation, broker ACLs, rate limiting and a hash&#8209;chained audit log &mdash; see <code>docs/security-findings.md</code>. You do not rebuild those. You read them <em>after</em> solving the same problem yourself, then audit them for what the previous passes missed.</p>
+      </div>
+    </div>
+
+    <div class="note">
+      <h4>The method &mdash; three steps, never two</h4>
+      <p><strong>Prove it. Fix it. Prove it again.</strong> Every task below opens with a command that demonstrates the weakness against a running system, and closes with the same command failing. A fix you cannot demonstrate is a fix nobody can trust, and in this system several of the most serious weaknesses are completely invisible from the user interface. If you cannot show the before, you have not earned the after.</p>
+    </div>
+
+    <div class="note warn">
+      <h4>The rule that overrides every other rule</h4>
+      <p>Nothing in this programme is ever tested against a robot that can move while a person is within its reach. Simulation and the sandbox first, hardware on blocks second, hardware on the floor only with a human on a physical emergency stop. Section&nbsp;09 makes this formal. Read it before your first command.</p>
+    </div>
+  </section>
+
+  <section id="s01" class="stack" style="padding-top:46px">
+    <div class="sechead"><div class="bar"></div><p class="snum">01</p><h2>The system, in five boundaries</h2></div>
+
+    <div class="prose stack">
+      <p>A security review that starts with a list of servers produces a list of servers. Start instead with the question that actually matters: <strong>between a student clicking &ldquo;forward&rdquo; and a wheel turning, how many times does one component decide to trust another?</strong> Each of those moments is a place an attacker can insert themselves, and each needs a different control.</p>
+      <p>There are four such moments in our architecture, plus the operator&rsquo;s own identity. Everything in this document hangs off this picture.</p>
+    </div>
+
+    <figure>
+      <div class="figbox">
+        <svg class="dg" viewBox="0 0 980 380" role="img" aria-label="Five components in a row from browser to motors, with four trust boundaries between them and the control that enforces each">
+          <defs>
+            <marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><polygon class="dg-ah" points="0,0 10,5 0,10"/></marker>
+            <marker id="ah1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><polygon class="dg-ah-a" points="0,0 10,5 0,10"/></marker>
+          </defs>
+
+          <text x="0" y="18" class="dg-mo-a">THE COMMAND PATH</text>
+          <text x="0" y="36" class="dg-st">One click in a browser, five components, four changes of trust.</text>
+
+          <rect x="0" y="64" width="160" height="66" rx="5" class="dg-box"/>
+          <text x="80" y="90" text-anchor="middle" class="dg-t">Operator browser</text>
+          <text x="80" y="108" text-anchor="middle" class="dg-st">student or instructor</text>
+          <text x="80" y="122" text-anchor="middle" class="dg-mo">React &middot; WSS</text>
+
+          <rect x="205" y="64" width="160" height="66" rx="5" class="dg-box"/>
+          <text x="285" y="90" text-anchor="middle" class="dg-t">Cloud API</text>
+          <text x="285" y="108" text-anchor="middle" class="dg-st">ECS Fargate</text>
+          <text x="285" y="122" text-anchor="middle" class="dg-mo">FastAPI</text>
+
+          <rect x="410" y="64" width="160" height="66" rx="5" class="dg-box-a"/>
+          <text x="490" y="90" text-anchor="middle" class="dg-t">MQTT broker</text>
+          <text x="490" y="108" text-anchor="middle" class="dg-st">AWS IoT Core</text>
+          <text x="490" y="122" text-anchor="middle" class="dg-mo">the only road in</text>
+
+          <rect x="615" y="64" width="160" height="66" rx="5" class="dg-box"/>
+          <text x="695" y="90" text-anchor="middle" class="dg-t">Robot agent</text>
+          <text x="695" y="108" text-anchor="middle" class="dg-st">Jetson at the edge</text>
+          <text x="695" y="122" text-anchor="middle" class="dg-mo">paho &middot; asyncio</text>
+
+          <rect x="820" y="64" width="160" height="66" rx="5" class="dg-box-f"/>
+          <text x="900" y="90" text-anchor="middle" class="dg-t">ROS2 &rarr; motors</text>
+          <text x="900" y="108" text-anchor="middle" class="dg-st">physical world</text>
+          <text x="900" y="122" text-anchor="middle" class="dg-mo-f">irreversible</text>
+
+          <line x1="160" y1="97" x2="199" y2="97" class="dg-l" marker-end="url(#ah1)"/>
+          <line x1="365" y1="97" x2="404" y2="97" class="dg-l" marker-end="url(#ah1)"/>
+          <line x1="570" y1="97" x2="609" y2="97" class="dg-l" marker-end="url(#ah1)"/>
+          <line x1="775" y1="97" x2="814" y2="97" class="dg-l-a" marker-end="url(#ah1a)"/>
+
+          <line x1="182" y1="52" x2="182" y2="250" class="dg-bd"/>
+          <line x1="387" y1="52" x2="387" y2="250" class="dg-bd"/>
+          <line x1="592" y1="52" x2="592" y2="250" class="dg-bd"/>
+          <line x1="797" y1="52" x2="797" y2="250" class="dg-bd"/>
+
+          <circle cx="182" cy="150" r="13" class="dg-box-f"/><text x="182" y="155" text-anchor="middle" class="dg-mo-f">B1</text>
+          <circle cx="387" cy="150" r="13" class="dg-box-f"/><text x="387" y="155" text-anchor="middle" class="dg-mo-f">B2</text>
+          <circle cx="592" cy="150" r="13" class="dg-box-f"/><text x="592" y="155" text-anchor="middle" class="dg-mo-f">B3</text>
+          <circle cx="797" cy="150" r="13" class="dg-box-f"/><text x="797" y="155" text-anchor="middle" class="dg-mo-f">B4</text>
+
+          <text x="182" y="188" text-anchor="middle" class="dg-t">Public internet</text>
+          <text x="182" y="206" text-anchor="middle" class="dg-st">Who is this operator?</text>
+          <text x="387" y="188" text-anchor="middle" class="dg-t">Cloud &rarr; broker</text>
+          <text x="387" y="206" text-anchor="middle" class="dg-st">Is this the real backend?</text>
+          <text x="592" y="188" text-anchor="middle" class="dg-t">Broker &rarr; robot</text>
+          <text x="592" y="206" text-anchor="middle" class="dg-st">Is this command authentic?</text>
+          <text x="797" y="188" text-anchor="middle" class="dg-t">Agent &rarr; actuator</text>
+          <text x="797" y="206" text-anchor="middle" class="dg-st">Is this command safe?</text>
+
+          <line x1="0" y1="240" x2="980" y2="240" class="dg-l" stroke-dasharray="2 4"/>
+          <text x="0" y="262" class="dg-mo-a">ENFORCED BY</text>
+
+          <rect x="102" y="276" width="160" height="56" rx="5" class="dg-box-q"/>
+          <text x="182" y="297" text-anchor="middle" class="dg-mo">OIDC &rarr; signed JWT</text>
+          <text x="182" y="315" text-anchor="middle" class="dg-st">expiry + revocation</text>
+
+          <rect x="307" y="276" width="160" height="56" rx="5" class="dg-box-q"/>
+          <text x="387" y="297" text-anchor="middle" class="dg-mo">mTLS client cert</text>
+          <text x="387" y="315" text-anchor="middle" class="dg-st">+ per-role topic ACL</text>
+
+          <rect x="512" y="276" width="160" height="56" rx="5" class="dg-box-q"/>
+          <text x="592" y="297" text-anchor="middle" class="dg-mo">signed envelope</text>
+          <text x="592" y="315" text-anchor="middle" class="dg-st">nonce + expiry, anti-replay</text>
+
+          <rect x="717" y="276" width="160" height="56" rx="5" class="dg-box-q"/>
+          <text x="797" y="297" text-anchor="middle" class="dg-mo">safety interlock</text>
+          <text x="797" y="315" text-anchor="middle" class="dg-st">watchdog, limits, e-stop</text>
+
+          <text x="898" y="304" class="dg-st">Task</text>
+          <text x="898" y="320" class="dg-mo-a">T10&ndash;T12</text>
+        </svg>
+      </div>
+      <figcaption><b>Trust changes hands four times.</b> Each boundary asks a different question, so each needs a different control &mdash; a perfect login (B1) does nothing about a forged MQTT message injected at B3, and none of the first three can stop a legitimate command that is simply unsafe (B4). Tasks in Part III are organised by which boundary they harden.</figcaption>
+    </figure>
+
+    <div class="prose stack">
+      <h3>Read the boundaries as questions, not as walls</h3>
+      <p>Students new to security tend to picture a firewall: one wall, attacker outside, everything inside safe. That model fails here immediately, because the robot is not inside anything &mdash; it sits on a school&rsquo;s Wi&#8209;Fi, physically reachable by the same students who use it, dialling out to a cloud it cannot authenticate without help.</p>
+      <p>The useful model is the one in the picture. At every hop, the receiving side must independently answer &ldquo;should I act on this?&rdquo; without relying on the fact that it arrived. <strong>B3 is the boundary people forget.</strong> A message that reaches the robot over a correctly authenticated broker connection is still only proof that <em>somebody</em> with broker access sent it &mdash; not that the operator who appears to have sent it actually did.</p>
+    </div>
+  </section>
+
+  <section id="s02" class="stack" style="padding-top:46px">
+    <div class="sechead"><div class="bar"></div><p class="snum">02</p><h2>Why this is not a web app</h2></div>
+
+    <div class="prose stack">
+      <p>Most of what you have been taught about web security assumes the worst outcome is data: rows read that should not have been, records changed, an account taken over. Those are serious and they all apply here. But this system has one extra hop past the database, and that hop is made of metal.</p>
+    </div>
+
+    <figure>
+      <div class="figbox">
+        <svg class="dg" viewBox="0 0 980 250" role="img" aria-label="Two parallel chains with the same four hops; the web application chain ends in a data incident, the robot chain ends in physical motion">
+          <defs>
+            <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><polygon class="dg-ah" points="0,0 10,5 0,10"/></marker>
+            <marker id="ah2f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><polygon class="dg-ah-f" points="0,0 10,5 0,10"/></marker>
+          </defs>
+
+          <text x="0" y="16" class="dg-mo">A FAMILIAR WEB APPLICATION</text>
+          <rect x="0" y="30" width="150" height="44" rx="5" class="dg-box"/><text x="75" y="57" text-anchor="middle" class="dg-t">Hostile input</text>
+          <rect x="192" y="30" width="150" height="44" rx="5" class="dg-box"/><text x="267" y="57" text-anchor="middle" class="dg-t">Server accepts</text>
+          <rect x="384" y="30" width="150" height="44" rx="5" class="dg-box"/><text x="459" y="57" text-anchor="middle" class="dg-t">Reaches storage</text>
+          <rect x="576" y="30" width="150" height="44" rx="5" class="dg-box"/><text x="651" y="57" text-anchor="middle" class="dg-t">Row changes</text>
+          <rect x="768" y="30" width="212" height="44" rx="5" class="dg-box-q"/>
+          <text x="874" y="51" text-anchor="middle" class="dg-t">Data incident</text>
+          <text x="874" y="66" text-anchor="middle" class="dg-mo-n">restore from backup</text>
+          <line x1="150" y1="52" x2="186" y2="52" class="dg-l" marker-end="url(#ah2)"/>
+          <line x1="342" y1="52" x2="378" y2="52" class="dg-l" marker-end="url(#ah2)"/>
+          <line x1="534" y1="52" x2="570" y2="52" class="dg-l" marker-end="url(#ah2)"/>
+          <line x1="726" y1="52" x2="762" y2="52" class="dg-l" marker-end="url(#ah2)"/>
+
+          <line x1="0" y1="104" x2="980" y2="104" class="dg-l" stroke-dasharray="2 4"/>
+
+          <text x="0" y="134" class="dg-mo-f">THE SAME FOUR HOPS, ON OUR SYSTEM</text>
+          <rect x="0" y="148" width="150" height="60" rx="5" class="dg-box"/>
+          <text x="75" y="172" text-anchor="middle" class="dg-t">Forged publish</text>
+          <text x="75" y="190" text-anchor="middle" class="dg-mo">mosquitto_pub</text>
+          <rect x="192" y="148" width="150" height="60" rx="5" class="dg-box"/>
+          <text x="267" y="172" text-anchor="middle" class="dg-t">Broker accepts</text>
+          <text x="267" y="190" text-anchor="middle" class="dg-mo">no ACL</text>
+          <rect x="384" y="148" width="150" height="60" rx="5" class="dg-box"/>
+          <text x="459" y="172" text-anchor="middle" class="dg-t">Agent acts</text>
+          <text x="459" y="190" text-anchor="middle" class="dg-mo">robots/id/cmd</text>
+          <rect x="576" y="148" width="150" height="60" rx="5" class="dg-box"/>
+          <text x="651" y="172" text-anchor="middle" class="dg-t">ROS2 publishes</text>
+          <text x="651" y="190" text-anchor="middle" class="dg-mo">/cmd_vel</text>
+          <rect x="768" y="148" width="212" height="60" rx="5" class="dg-box-f"/>
+          <text x="874" y="172" text-anchor="middle" class="dg-t">The robot moves</text>
+          <text x="874" y="190" text-anchor="middle" class="dg-mo-f">no backup restores this</text>
+          <line x1="150" y1="178" x2="186" y2="178" class="dg-l-f" marker-end="url(#ah2f)"/>
+          <line x1="342" y1="178" x2="378" y2="178" class="dg-l-f" marker-end="url(#ah2f)"/>
+          <line x1="534" y1="178" x2="570" y2="178" class="dg-l-f" marker-end="url(#ah2f)"/>
+          <line x1="726" y1="178" x2="762" y2="178" class="dg-l-f" marker-end="url(#ah2f)"/>
+
+          <text x="0" y="236" class="dg-st">Identical vulnerability class. Identical exploit. The blast radius is what differs &mdash; and it is measured in metres and kilograms, not rows.</text>
+        </svg>
+      </div>
+      <figcaption><b>The same bug, one hop further.</b> Unauthenticated message injection is an ordinary finding in a web application. Here the final consumer is an actuator, so confidentiality and integrity failures convert directly into kinetic events. This is why the tasks in Tier&nbsp;3 exist and why they are not optional extras.</figcaption>
+    </figure>
+
+    <div class="grid3">
+      <div class="card">
+        <span class="tag">Consequence 1</span>
+        <h4>Availability is a safety property</h4>
+        <p>In a web app, downtime costs money. Here, a robot that loses its command link mid&#8209;motion must stop on its own &mdash; so the watchdog that does that is a <em>safety</em> control, and denial of service against the broker becomes a way to strand machines.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Consequence 2</span>
+        <h4>Integrity outranks confidentiality</h4>
+        <p>Reading a robot&rsquo;s battery percentage is a privacy problem. <em>Writing</em> one is a deception problem: an operator who is shown false telemetry makes a physically wrong decision. Forged status is often worse than stolen status.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Consequence 3</span>
+        <h4>The camera sees children</h4>
+        <p>These robots run in schools. The video path is not a feature to secure later &mdash; it is the single most sensitive data flow in the platform, and the cheapest control is the design rule that video is never recorded.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="s03" class="stack" style="padding-top:46px">
+    <div class="sechead"><div class="bar"></div><p class="snum">03</p><h2>The one road in: the topic contract</h2></div>
+
+    <div class="prose stack">
+      <p>Every byte that moves between the cloud and a robot crosses MQTT. Not some of them &mdash; all of them. Video negotiation, commands, battery readings, LiDAR scans, heartbeats. That was a deliberate architectural decision and it is the single most valuable security property this system has, because it means there is exactly <em>one</em> place to enforce who may say what.</p>
+      <p>The enforcement mechanism is the topic contract: a fixed set of topic names, each with a direction. <strong>Direction is the security property.</strong> A robot publishes its own telemetry and reads its own commands; the backend publishes commands and reads telemetry. Neither is permitted to write the other&rsquo;s side.</p>
+    </div>
+
+    <figure>
+      <div class="figbox">
+        <svg class="dg" viewBox="0 0 980 430" role="img" aria-label="Eight MQTT topics between robot and backend, six northbound written only by the robot and two southbound written only by the backend">
+          <defs>
+            <marker id="ah3n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><polygon class="dg-ah-n" points="0,0 10,5 0,10"/></marker>
+            <marker id="ah3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><polygon class="dg-ah-a" points="0,0 10,5 0,10"/></marker>
+          </defs>
+
+          <text x="0" y="16" class="dg-mo-a">SOUTHBOUND &mdash; only the backend may write</text>
+          <text x="980" y="16" text-anchor="end" class="dg-mo-n">NORTHBOUND &mdash; only the robot may write</text>
+
+          <rect x="0" y="38" width="150" height="356" rx="6" class="dg-box"/>
+          <text x="75" y="66" text-anchor="middle" class="dg-t">Robot</text>
+          <text x="75" y="84" text-anchor="middle" class="dg-st">edge agent</text>
+          <text x="75" y="100" text-anchor="middle" class="dg-mo">user = robot_id</text>
+
+          <rect x="830" y="38" width="150" height="356" rx="6" class="dg-box"/>
+          <text x="905" y="66" text-anchor="middle" class="dg-t">Backend</text>
+          <text x="905" y="84" text-anchor="middle" class="dg-st">cloud API</text>
+          <text x="905" y="100" text-anchor="middle" class="dg-mo">user = backend</text>
+
+          <line x1="380" y1="126" x2="163" y2="126" class="dg-l-a" marker-end="url(#ah3a)"/>
+          <line x1="825" y1="126" x2="600" y2="126" class="dg-l-a"/>
+          <text x="490" y="130" text-anchor="middle" class="dg-mo-a">robots/{id}/cmd</text>
+          <text x="168" y="118" class="dg-mo-n">R</text><text x="818" y="118" text-anchor="end" class="dg-mo-a">W</text>
+
+          <line x1="380" y1="164" x2="163" y2="164" class="dg-l-a" marker-end="url(#ah3a)"/>
+          <line x1="825" y1="164" x2="600" y2="164" class="dg-l-a"/>
+          <text x="490" y="168" text-anchor="middle" class="dg-mo-a">robots/{id}/camera/offer</text>
+          <text x="168" y="156" class="dg-mo-n">R</text><text x="818" y="156" text-anchor="end" class="dg-mo-a">W</text>
+
+          <line x1="0" y1="196" x2="980" y2="196" class="dg-l" stroke-dasharray="2 4"/>
+
+          <line x1="155" y1="228" x2="380" y2="228" class="dg-l-n"/>
+          <line x1="600" y1="228" x2="817" y2="228" class="dg-l-n" marker-end="url(#ah3n)"/>
+          <text x="490" y="232" text-anchor="middle" class="dg-mo-n">robots/{id}/telemetry</text>
+          <text x="168" y="220" class="dg-mo-n">W</text><text x="818" y="220" text-anchor="end" class="dg-mo-a">R</text>
+
+          <line x1="155" y1="262" x2="380" y2="262" class="dg-l-n"/>
+          <line x1="600" y1="262" x2="817" y2="262" class="dg-l-n" marker-end="url(#ah3n)"/>
+          <text x="490" y="266" text-anchor="middle" class="dg-mo-n">robots/{id}/status</text>
+          <text x="168" y="254" class="dg-mo-n">W</text><text x="818" y="254" text-anchor="end" class="dg-mo-a">R</text>
+
+          <line x1="155" y1="296" x2="380" y2="296" class="dg-l-n"/>
+          <line x1="600" y1="296" x2="817" y2="296" class="dg-l-n" marker-end="url(#ah3n)"/>
+          <text x="490" y="300" text-anchor="middle" class="dg-mo-n">robots/{id}/health</text>
+          <text x="168" y="288" class="dg-mo-n">W</text><text x="818" y="288" text-anchor="end" class="dg-mo-a">R</text>
+
+          <line x1="155" y1="330" x2="380" y2="330" class="dg-l-n"/>
+          <line x1="600" y1="330" x2="817" y2="330" class="dg-l-n" marker-end="url(#ah3n)"/>
+          <text x="490" y="334" text-anchor="middle" class="dg-mo-n">robots/{id}/heartbeat &middot; lidar</text>
+          <text x="168" y="322" class="dg-mo-n">W</text><text x="818" y="322" text-anchor="end" class="dg-mo-a">R</text>
+
+          <line x1="155" y1="364" x2="380" y2="364" class="dg-l-n"/>
+          <line x1="600" y1="364" x2="817" y2="364" class="dg-l-n" marker-end="url(#ah3n)"/>
+          <text x="490" y="368" text-anchor="middle" class="dg-mo-n">robots/{id}/camera/answer</text>
+          <text x="168" y="356" class="dg-mo-n">W</text><text x="818" y="356" text-anchor="end" class="dg-mo-a">R</text>
+
+          <text x="0" y="420" class="dg-st">The broker substitutes each client&rsquo;s own username for <tspan class="dg-mo">%u</tspan>, so a robot is scoped to its own namespace automatically &mdash; onboarding robot #2 issues a credential, it never edits this file.</text>
+        </svg>
+      </div>
+      <figcaption><b>Eight topics, two directions, one rule.</b> Notice what the backend is <em>not</em> granted: write access to telemetry, status, health or heartbeat. That asymmetry is deliberate &mdash; a compromised backend should be able to issue commands (it legitimately does that) but never to fabricate a robot&rsquo;s self&#8209;reported state, because operators and safety logic both trust that state. See <code>cloud-container/mosquitto/aclfile</code>.</figcaption>
+    </figure>
+
+    <div class="note">
+      <h4>The question to ask of any new topic</h4>
+      <p>When someone adds a feature that needs a new topic, the design review is two questions long. <strong>Which side authors this, and who is harmed if the other side could forge it?</strong> If the answer to the second is &ldquo;an operator makes a wrong decision&rdquo; or &ldquo;the robot moves&rdquo;, the ACL entry is not a formality &mdash; it is the control.</p>
+    </div>
+  </section>
+
+  <section id="s04" class="stack" style="padding-top:46px">
+    <div class="sechead"><div class="bar"></div><p class="snum">04</p><h2>How an attacker actually gets in</h2></div>
+
+    <div class="prose stack">
+      <p>Real intrusions are rarely one clever exploit. They are a chain of small, individually unremarkable steps, each one making the next possible. Understanding the chain matters more than memorising vulnerabilities, because <strong>you only have to break one link</strong> &mdash; and knowing which links you can afford to lose is what defence in depth actually means.</p>
+      <p>Here is the most plausible chain against this platform, using only weaknesses that have genuinely existed in this codebase.</p>
+    </div>
+
+    <figure>
+      <div class="figbox">
+        <svg class="dg" viewBox="0 0 980 320" role="img" aria-label="Five stage attack chain from reconnaissance to physical impact with the control that breaks each stage below it">
+          <defs>
+            <marker id="ah4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><polygon class="dg-ah-f" points="0,0 10,5 0,10"/></marker>
+          </defs>
+
+          <text x="0" y="16" class="dg-mo-f">THE CHAIN</text>
+
+          <rect x="0" y="32" width="180" height="76" rx="5" class="dg-box"/>
+          <text x="90" y="54" text-anchor="middle" class="dg-t">1 &middot; Reconnaissance</text>
+          <text x="90" y="74" text-anchor="middle" class="dg-st">Scan the campus subnet.</text>
+          <text x="90" y="90" text-anchor="middle" class="dg-st">Find an open health port.</text>
+
+          <rect x="200" y="32" width="180" height="76" rx="5" class="dg-box"/>
+          <text x="290" y="54" text-anchor="middle" class="dg-t">2 &middot; Identity leak</text>
+          <text x="290" y="74" text-anchor="middle" class="dg-st">Endpoint returns robot_id</text>
+          <text x="290" y="90" text-anchor="middle" class="dg-st">&mdash; the MQTT username.</text>
+
+          <rect x="400" y="32" width="180" height="76" rx="5" class="dg-box"/>
+          <text x="490" y="54" text-anchor="middle" class="dg-t">3 &middot; Broker foothold</text>
+          <text x="490" y="74" text-anchor="middle" class="dg-st">One password shared by</text>
+          <text x="490" y="90" text-anchor="middle" class="dg-st">the whole fleet. Connect.</text>
+
+          <rect x="600" y="32" width="180" height="76" rx="5" class="dg-box"/>
+          <text x="690" y="54" text-anchor="middle" class="dg-t">4 &middot; Injection</text>
+          <text x="690" y="74" text-anchor="middle" class="dg-st">Publish to the cmd topic,</text>
+          <text x="690" y="90" text-anchor="middle" class="dg-st">or forge a status reading.</text>
+
+          <rect x="800" y="32" width="180" height="76" rx="5" class="dg-box-f"/>
+          <text x="890" y="54" text-anchor="middle" class="dg-t">5 &middot; Impact</text>
+          <text x="890" y="74" text-anchor="middle" class="dg-st">Robot moves. Operator is</text>
+          <text x="890" y="90" text-anchor="middle" class="dg-st">shown a false battery level.</text>
+
+          <line x1="180" y1="70" x2="194" y2="70" class="dg-l-f" marker-end="url(#ah4)"/>
+          <line x1="380" y1="70" x2="394" y2="70" class="dg-l-f" marker-end="url(#ah4)"/>
+          <line x1="580" y1="70" x2="594" y2="70" class="dg-l-f" marker-end="url(#ah4)"/>
+          <line x1="780" y1="70" x2="794" y2="70" class="dg-l-f" marker-end="url(#ah4)"/>
+
+          <line x1="0" y1="134" x2="980" y2="134" class="dg-l" stroke-dasharray="2 4"/>
+          <text x="0" y="162" class="dg-mo-n">THE LINK THAT BREAKS IT</text>
+
+          <rect x="0" y="178" width="180" height="84" rx="5" class="dg-box-q"/>
+          <text x="90" y="200" text-anchor="middle" class="dg-mo-n">Loopback binds</text>
+          <text x="90" y="218" text-anchor="middle" class="dg-st">Security groups.</text>
+          <text x="90" y="234" text-anchor="middle" class="dg-st">Nothing on 0.0.0.0.</text>
+          <text x="90" y="253" text-anchor="middle" class="dg-mo-a">T13 &middot; T20</text>
+
+          <rect x="200" y="178" width="180" height="84" rx="5" class="dg-box-q"/>
+          <text x="290" y="200" text-anchor="middle" class="dg-mo-n">No identity on</text>
+          <text x="290" y="218" text-anchor="middle" class="dg-st">an open endpoint.</text>
+          <text x="290" y="234" text-anchor="middle" class="dg-st">Liveness only.</text>
+          <text x="290" y="253" text-anchor="middle" class="dg-mo-a">T13</text>
+
+          <rect x="400" y="178" width="180" height="84" rx="5" class="dg-box-q"/>
+          <text x="490" y="200" text-anchor="middle" class="dg-mo-n">Per-device certs</text>
+          <text x="490" y="218" text-anchor="middle" class="dg-st">One key per robot,</text>
+          <text x="490" y="234" text-anchor="middle" class="dg-st">revocable alone.</text>
+          <text x="490" y="253" text-anchor="middle" class="dg-mo-a">T07 &middot; T08</text>
+
+          <rect x="600" y="178" width="180" height="84" rx="5" class="dg-box-q"/>
+          <text x="690" y="200" text-anchor="middle" class="dg-mo-n">ACL + envelope</text>
+          <text x="690" y="218" text-anchor="middle" class="dg-st">Direction enforced,</text>
+          <text x="690" y="234" text-anchor="middle" class="dg-st">commands signed.</text>
+          <text x="690" y="253" text-anchor="middle" class="dg-mo-a">T05 &middot; T14</text>
+
+          <rect x="800" y="178" width="180" height="84" rx="5" class="dg-box-q"/>
+          <text x="890" y="200" text-anchor="middle" class="dg-mo-n">Safety interlock</text>
+          <text x="890" y="218" text-anchor="middle" class="dg-st">Watchdog stop,</text>
+          <text x="890" y="234" text-anchor="middle" class="dg-st">bounded velocity.</text>
+          <text x="890" y="253" text-anchor="middle" class="dg-mo-a">T17</text>
+
+          <text x="0" y="296" class="dg-st">Five controls, five owners, five separate failure modes. An attacker needs every link; a defender needs any one &mdash; which is exactly why</text>
+          <text x="0" y="312" class="dg-st">you build more than one, and why &ldquo;we already have authentication&rdquo; is never an answer to &ldquo;what stops stage 4?&rdquo;</text>
+        </svg>
+      </div>
+      <figcaption><b>Every stage here is a real finding.</b> Stage&nbsp;2 was finding F1 in <code>docs/security-findings.md</code>, rated critical precisely because the leaked <code>robot_id</code> <em>is</em> the MQTT username. Stage&nbsp;3 remains true today: the fleet shares one password. Your Tier&nbsp;1 and Tier&nbsp;3 work is what turns this chain into five independent walls.</figcaption>
+    </figure>
+  </section>
+
+  <section id="s05" class="stack" style="padding-top:46px">
+    <div class="sechead"><div class="bar"></div><p class="snum">05</p><h2>Defence in depth, layer by layer</h2></div>
+
+    <div class="prose stack">
+      <p>&ldquo;Defence in depth&rdquo; is repeated so often it has stopped meaning anything. Here is the version worth holding on to: <strong>each layer should stop a different class of attacker, and you should be able to say what still gets through when that layer is the only one you have.</strong> If two layers stop the same thing, you have one layer and some redundancy.</p>
+    </div>
+
+    <figure>
+      <div class="figbox">
+        <svg class="dg" viewBox="0 0 980 400" role="img" aria-label="Six defensive layers from network exposure down to actuation safety, each showing what it stops and what still gets through if it is the only layer">
+          <text x="0" y="16" class="dg-mo-a">LAYER</text>
+          <text x="330" y="16" class="dg-mo-n">STOPS</text>
+          <text x="655" y="16" class="dg-mo-f">STILL GETS THROUGH IF THIS IS YOUR ONLY LAYER</text>
+
+          <rect x="0" y="30" width="300" height="52" rx="5" class="dg-box"/>
+          <text x="16" y="52" class="dg-t">1 &middot; Network exposure</text>
+          <text x="16" y="70" class="dg-mo">loopback binds &middot; VPC SGs</text>
+          <text x="330" y="60" class="dg-st">Internet-wide scanners</text>
+          <text x="655" y="60" class="dg-st">Anyone already on the campus Wi-Fi</text>
+
+          <rect x="0" y="90" width="300" height="52" rx="5" class="dg-box"/>
+          <text x="16" y="112" class="dg-t">2 &middot; Transport</text>
+          <text x="16" y="130" class="dg-mo">TLS 8883 &middot; WSS &middot; HTTPS</text>
+          <text x="330" y="120" class="dg-st">Passive sniffing, tampering in transit</text>
+          <text x="655" y="120" class="dg-st">Anyone holding a valid credential</text>
+
+          <rect x="0" y="150" width="300" height="52" rx="5" class="dg-box"/>
+          <text x="16" y="172" class="dg-t">3 &middot; Identity</text>
+          <text x="16" y="190" class="dg-mo">per-device x509 &middot; JWT</text>
+          <text x="330" y="180" class="dg-st">Unauthenticated clients entirely</text>
+          <text x="655" y="180" class="dg-st">A robot that publishes to another robot&rsquo;s topic</text>
+
+          <rect x="0" y="210" width="300" height="52" rx="5" class="dg-box-a"/>
+          <text x="16" y="232" class="dg-t">4 &middot; Authorization</text>
+          <text x="16" y="250" class="dg-mo">topic ACL &middot; direction</text>
+          <text x="330" y="240" class="dg-st">Lateral movement across the fleet</text>
+          <text x="655" y="240" class="dg-st">A replayed command that was once legitimate</text>
+
+          <rect x="0" y="270" width="300" height="52" rx="5" class="dg-box-a"/>
+          <text x="16" y="292" class="dg-t">5 &middot; Message authenticity</text>
+          <text x="16" y="310" class="dg-mo">signed &middot; nonce &middot; expiry</text>
+          <text x="330" y="300" class="dg-st">Replay, injection, forged origin</text>
+          <text x="655" y="300" class="dg-st">A correctly signed command that is simply unsafe</text>
+
+          <rect x="0" y="330" width="300" height="52" rx="5" class="dg-box-f"/>
+          <text x="16" y="352" class="dg-t">6 &middot; Actuation safety</text>
+          <text x="16" y="370" class="dg-mo">watchdog &middot; limits &middot; e-stop</text>
+          <text x="330" y="360" class="dg-st">Physical harm, runaway motion</text>
+          <text x="655" y="360" class="dg-st">Nothing &mdash; this is the last layer, so it must never depend on the network</text>
+        </svg>
+      </div>
+      <figcaption><b>Read the right-hand column first.</b> It is the honest one: it names the attacker each layer does <em>not</em> stop, which is how you decide what to build next. Layer&nbsp;6 is the only one that must keep working when every layer above it has failed &mdash; which is why the emergency stop can never be implemented as a cloud API call.</figcaption>
+    </figure>
+  </section>
+
+  <section id="s06" class="stack" style="padding-top:56px">
+    <div class="sechead"><div class="bar"></div><p class="snum">06</p><h2>What we are actually protecting</h2></div>
+
+    <div class="prose stack">
+      <p>Before listing threats, list assets &mdash; otherwise you end up defending whatever is easiest to defend. Rank them by the harm caused when they fail, not by how technically interesting they are.</p>
+    </div>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Asset</th><th>Why it matters here</th><th>Worst credible outcome</th><th class="nw">Rank</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Physical safety</strong></td><td>Robots operate in schools, within reach of children</td><td>A person is struck by a machine under attacker control</td><td><span class="sev cr">Critical</span></td></tr>
+          <tr><td><strong>Control authority</strong></td><td>Who is allowed to make a specific robot move</td><td>An unauthorised party drives a robot; nobody can prove who</td><td><span class="sev cr">Critical</span></td></tr>
+          <tr><td><strong>Live camera video</strong></td><td>The feed shows minors in a classroom</td><td>A stream is watched, recorded or republished by an outsider</td><td><span class="sev cr">Critical</span></td></tr>
+          <tr><td><strong>AWS account</strong></td><td>Control plane for every robot in every school</td><td>A leaked key yields fleet-wide access and data</td><td><span class="sev cr">Critical</span></td></tr>
+          <tr><td><strong>Device credentials</strong></td><td>One shared fleet password today</td><td>One stolen robot compromises every robot</td><td><span class="sev hi">High</span></td></tr>
+          <tr><td><strong>Operator sessions</strong></td><td>JWTs that authorise real motion</td><td>Session theft gives an attacker a legitimate-looking identity</td><td><span class="sev hi">High</span></td></tr>
+          <tr><td><strong>Telemetry integrity</strong></td><td>Operators and safety logic both trust it</td><td>A forged battery or obstacle reading causes a wrong decision</td><td><span class="sev hi">High</span></td></tr>
+          <tr><td><strong>Fleet availability</strong></td><td>Lessons depend on it; stranded robots are a safety event</td><td>A single client stalls the broker for every school</td><td><span class="sev hi">High</span></td></tr>
+          <tr><td><strong>Tenant isolation</strong></td><td>Many schools share one deployment</td><td>One school enumerates or drives another&rsquo;s robots</td><td><span class="sev hi">High</span></td></tr>
+          <tr><td><strong>Audit trail</strong></td><td>The only record of who commanded what</td><td>An incident cannot be reconstructed or attributed</td><td><span class="sev me">Medium</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note good">
+      <h4>The cheapest control in the whole system</h4>
+      <p>Video is never recorded. Not &ldquo;recorded and encrypted&rdquo;, not &ldquo;recorded with a retention policy&rdquo; &mdash; never written down at all. Data you do not hold cannot be breached, subpoenaed, or leaked by a future bug, and for footage of children that calculus is not close. When you are asked to add a feature that would store video, this is the design rule to cite.</p>
+    </div>
+  </section>
+
+  <section id="s07" class="stack" style="padding-top:46px">
+    <div class="sechead"><div class="bar"></div><p class="snum">07</p><h2>Who we are defending against</h2></div>
+
+    <div class="prose stack">
+      <p>Threat actors are not all &ldquo;hackers&rdquo;. They differ in access, skill, motive and &mdash; most usefully &mdash; in which control actually stops them. Ours, roughly in order of likelihood:</p>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <span class="tag">Most likely &middot; highest access</span>
+        <h4>The curious student</h4>
+        <p>Already on the campus network, already holds a legitimate login, has unlimited time and no malice &mdash; just curiosity and a browser devtools console. Finds things by accident. <strong>Stopped by:</strong> server&#8209;side authorisation, because every client&#8209;side guard is visible to them.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Likely &middot; disruptive</span>
+        <h4>The prankster</h4>
+        <p>The same access, but intends to disrupt a lesson &mdash; blacking out someone&rsquo;s video, driving a robot during a class, spamming commands. <strong>Stopped by:</strong> rate limits, session locks, per&#8209;operator scoping and audit that makes it attributable.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Opportunistic</span>
+        <h4>The campus network attacker</h4>
+        <p>Anyone on the same Wi&#8209;Fi: a guest, a compromised laptop, someone in the car park. Can sniff plaintext, ARP&#8209;spoof, and reach anything bound to <code>0.0.0.0</code>. <strong>Stopped by:</strong> TLS everywhere and loopback binds.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Automated &middot; constant</span>
+        <h4>The internet-wide scanner</h4>
+        <p>Never targets you specifically; simply finds every exposed broker, database and metrics endpoint on the public internet within hours. <strong>Stopped by:</strong> nothing being publicly bound that does not need to be, and no default credentials anywhere.</p>
+      </div>
+      <div class="card">
+        <span class="tag">High impact &middot; physical</span>
+        <h4>The compromised device</h4>
+        <p>A robot is portable, unattended, and eventually one will be stolen or borrowed. Assume its filesystem and keys are read. <strong>Stopped by:</strong> per&#8209;device credentials that can be revoked individually, and ACLs that scope a device to its own topics.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Rare &middot; hardest</span>
+        <h4>The insider and the supply chain</h4>
+        <p>Staff with legitimate access, or a malicious dependency pulled by <code>pip install</code>. Neither is stopped by perimeter controls. <strong>Stopped by:</strong> least privilege, tamper&#8209;evident audit, pinned and scanned dependencies, reviewed base images.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="s08" class="stack" style="padding-top:46px">
+    <div class="sechead"><div class="bar"></div><p class="snum">08</p><h2>Threat register</h2></div>
+
+    <div class="prose stack">
+      <p>Sixteen threats, each mapped to the boundary it crosses, a STRIDE category, and the task that addresses it. The <strong>status</strong> column distinguishes the real platform from the sandbox: several of these have already been fixed in <code>cloud-container/</code> and remain wide open in <code>secure_robotstore/</code>, which is precisely what makes the sandbox a safe place to learn the fix before auditing the real one.</p>
+    </div>
+
+    <div class="tw">
+      <table style="min-width:900px">
+        <thead><tr><th>ID</th><th>Threat</th><th class="nw">Bdry</th><th class="nw">STRIDE</th><th class="nw">Severity</th><th>Status in the real platform</th><th class="nw">Task</th></tr></thead>
+        <tbody>
+          <tr><td class="nw"><code>TH-01</code></td><td>Anonymous broker access &mdash; anyone can forge telemetry or publish commands</td><td>B3</td><td>S&middot;T</td><td><span class="sev cr">Critical</span></td><td><span class="sev ok">Fixed</span> authn + ACL in place</td><td class="nw"><code>T04 T05</code></td></tr>
+          <tr><td class="nw"><code>TH-02</code></td><td>One MQTT password shared by the whole fleet &mdash; one stolen robot compromises all</td><td>B3</td><td>S</td><td><span class="sev hi">High</span></td><td><span class="sev hi">Open</span> known limitation</td><td class="nw"><code>T08</code></td></tr>
+          <tr><td class="nw"><code>TH-03</code></td><td>Plaintext MQTT on campus Wi-Fi exposes credentials and telemetry</td><td>B3</td><td>I</td><td><span class="sev hi">High</span></td><td><span class="sev me">Partial</span> TLS supported, off by default</td><td class="nw"><code>T07</code></td></tr>
+          <tr><td class="nw"><code>TH-04</code></td><td>Command replay &mdash; a captured drive command re-sent minutes later</td><td>B3</td><td>T</td><td><span class="sev hi">High</span></td><td><span class="sev hi">Open</span> no nonce or expiry on commands</td><td class="nw"><code>T14</code></td></tr>
+          <tr><td class="nw"><code>TH-05</code></td><td>Robot health endpoint published on <code>0.0.0.0</code>, leaking the MQTT username</td><td>B4</td><td>I</td><td><span class="sev cr">Critical</span></td><td><span class="sev ok">Fixed</span> F1 &mdash; token + loopback</td><td class="nw"><code>T13</code></td></tr>
+          <tr><td class="nw"><code>TH-06</code></td><td>Oversized payload stalls the single event loop serving the whole fleet</td><td>B2</td><td>D</td><td><span class="sev hi">High</span></td><td><span class="sev ok">Fixed</span> F2 &mdash; broker + app caps</td><td class="nw"><code>T06</code></td></tr>
+          <tr><td class="nw"><code>TH-07</code></td><td>Session token travelling in a WebSocket URL lands in proxy and access logs</td><td>B1</td><td>S</td><td><span class="sev hi">High</span></td><td><span class="sev ok">Fixed</span> single-use ws ticket</td><td class="nw"><code>T11</code></td></tr>
+          <tr><td class="nw"><code>TH-08</code></td><td>Login brute-force against a single shared operator credential</td><td>B1</td><td>S</td><td><span class="sev me">Medium</span></td><td><span class="sev ok">Fixed</span> Redis attempt limiter</td><td class="nw"><code>T12</code></td></tr>
+          <tr><td class="nw"><code>TH-09</code></td><td>Any operator can terminate another&rsquo;s live video by requesting it</td><td>B1</td><td>D</td><td><span class="sev hi">High</span></td><td><span class="sev ok">Fixed</span> F3 &mdash; viewer lock + 429</td><td class="nw"><code>T19</code></td></tr>
+          <tr><td class="nw"><code>TH-10</code></td><td>Unbounded SDP from a browser reaches a C parser on the robot</td><td>B3</td><td>T&middot;E</td><td><span class="sev hi">High</span></td><td><span class="sev ok">Fixed</span> F4 &mdash; size + format validation</td><td class="nw"><code>T06</code></td></tr>
+          <tr><td class="nw"><code>TH-11</code></td><td>Committed default secrets reaching a production deployment</td><td>all</td><td>E</td><td><span class="sev hi">High</span></td><td><span class="sev me">Partial</span> startup guard exists</td><td class="nw"><code>T16</code></td></tr>
+          <tr><td class="nw"><code>TH-12</code></td><td>Cross-tenant access &mdash; one school enumerates or drives another&rsquo;s robots</td><td>B1</td><td>I&middot;E</td><td><span class="sev hi">High</span></td><td><span class="sev hi">Design</span> row-level security planned</td><td class="nw"><code>T22</code></td></tr>
+          <tr><td class="nw"><code>TH-13</code></td><td>No tamper-evident record of who commanded what, when</td><td>&mdash;</td><td>R</td><td><span class="sev me">Medium</span></td><td><span class="sev ok">Fixed</span> hash-chained audit log</td><td class="nw"><code>T18</code></td></tr>
+          <tr><td class="nw"><code>TH-14</code></td><td>Containers run as root; robot image mounted the host X11 socket</td><td>edge</td><td>E</td><td><span class="sev me">Medium</span></td><td><span class="sev ok">Fixed</span> F5 &mdash; non-root, read-only</td><td class="nw"><code>T20</code></td></tr>
+          <tr><td class="nw"><code>TH-15</code></td><td>Vulnerable dependency or base image pulled into a build</td><td>supply</td><td>T</td><td><span class="sev me">Medium</span></td><td><span class="sev hi">Open</span> no scanning in CI</td><td class="nw"><code>T21</code></td></tr>
+          <tr><td class="nw"><code>TH-16</code></td><td>Link lost mid-motion with no watchdog &mdash; the robot keeps driving</td><td>B4</td><td>D&middot;safety</td><td><span class="sev cr">Critical</span></td><td><span class="sev me">Verify</span> must be proven, not assumed</td><td class="nw"><code>T17</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="tiny prose-wide" style="margin-top:4px">STRIDE: <strong>S</strong>poofing &middot; <strong>T</strong>ampering &middot; <strong>R</strong>epudiation &middot; <strong>I</strong>nformation disclosure &middot; <strong>D</strong>enial of service &middot; <strong>E</strong>levation of privilege. Boundaries B1&ndash;B4 are the ones drawn in section&nbsp;01.</p>
+  </section>
+
+  <section id="s09" class="stack" style="padding-top:46px">
+    <div class="sechead"><div class="bar"></div><p class="snum">09</p><h2>Rules of engagement</h2></div>
+
+    <div class="prose stack">
+      <p>You are about to spend twelve weeks doing things that, done to somebody else&rsquo;s system, would be a criminal offence. The only thing separating security work from an intrusion is <strong>written authorisation and agreed scope</strong>. Professionals treat this as paperwork that protects them, because it does. Read this section before your first command and ask about anything ambiguous rather than assuming.</p>
+    </div>
+
+    <div class="kv">
+      <div><dt>In scope</dt><dd>The <code>secure_robotstore</code> sandbox. Your own local <code>docker compose</code> stack. The lab robot, only under the hardware protocol below. Test accounts you were issued.</dd></div>
+      <div><dt>Out of scope</dt><dd>Any production or school deployment. Any robot other than the designated lab unit. Campus network infrastructure &mdash; switches, access points, the university&rsquo;s own services. Any third&#8209;party service, including AWS control&#8209;plane APIs beyond our own account. Other people&rsquo;s laptops and accounts.</dd></div>
+      <div><dt>Never permitted</dt><dd>Denial&#8209;of&#8209;service testing against shared infrastructure. Social engineering of staff, students or suppliers. Physical tampering with devices that are not the lab unit. Copying real video or personal data onto a personal machine. Publishing a finding outside the team before it is fixed.</dd></div>
+      <div><dt>Hardware protocol</dt><dd>Simulation first. Then the robot on blocks, wheels clear of the ground. Only then the floor &mdash; in a cleared area, with a second person holding a physical emergency stop and no one else within three metres. A test that would be unsafe if it worked is not run.</dd></div>
+      <div><dt>If you find something real</dt><dd>Stop. Do not explore further, do not pivot, do not test how far it goes. Write down exactly what you did, capture the evidence you already have, and tell your supervisor the same day. In particular: if you discover you can reach something outside the scope above, that is the moment to stop, not the moment to confirm it.</dd></div>
+      <div><dt>Reporting format</dt><dd>One page per finding: what it is, the exact steps to reproduce, the impact in plain language, the severity you propose and why, and a suggested fix. Use <code>docs/security-findings.md</code> as the model &mdash; it traces every finding to a file and line and records how it was found.</dd></div>
+    </div>
+
+    <div class="note warn">
+      <h4>The line you do not cross</h4>
+      <p>&ldquo;I was only testing&rdquo; is not a defence, and curiosity is not authorisation. If a step is not clearly inside the scope above, it is outside it until someone tells you otherwise in writing. Asking costs you an hour; guessing wrong can end an internship and, on a system attached to machinery near children, cause real harm.</p>
+    </div>
+  </section>
+
+  <section id="s10" class="stack" style="padding-top:56px">
+    <div class="sechead"><div class="bar"></div><p class="snum">10</p><h2>Two tracks, four tiers, twenty-two tasks</h2></div>
+
+    <div class="prose stack">
+      <p>The work splits along the natural seam in the architecture. One of you owns the half below the broker &mdash; devices, transport, message authenticity. The other owns the half above it &mdash; operators, sessions, the cloud. You each become the person who knows that half properly, and you review each other&rsquo;s pull requests, which is where most of the learning actually happens.</p>
+      <p>Tier&nbsp;3 is deliberately shared: the cyber&#8209;physical problems sit exactly on the seam, and neither half can solve them alone.</p>
+    </div>
+
+    <div class="grid2">
+      <div class="card" style="border-color:color-mix(in srgb,var(--accent) 40%,transparent)">
+        <span class="trk a" style="align-self:flex-start">Track A</span>
+        <h4>Device &amp; Transport</h4>
+        <p>Everything from the broker outward: MQTT identity and authorisation, TLS and per&#8209;device certificates, payload limits, the robot&rsquo;s own exposed surface, and proving a command is authentic rather than merely delivered.</p>
+        <p class="tiny" style="margin-top:2px"><code>T04</code> <code>T05</code> <code>T06</code> <code>T07</code> <code>T08</code> <code>T13</code> <code>T14</code></p>
+      </div>
+      <div class="card" style="border-color:color-mix(in srgb,var(--nominal) 40%,transparent)">
+        <span class="trk b" style="align-self:flex-start">Track B</span>
+        <h4>Identity &amp; Cloud</h4>
+        <p>Everything from the browser inward: credential storage, tokens and their expiry, authorising every route and socket, rate limiting, browser&#8209;facing headers, secret management and tenant isolation.</p>
+        <p class="tiny" style="margin-top:2px"><code>T09</code> <code>T10</code> <code>T11</code> <code>T12</code> <code>T15</code> <code>T16</code> <code>T22</code></p>
+      </div>
+    </div>
+
+    <div class="note">
+      <h4>Every task has the same shape, and the same non-negotiable field</h4>
+      <p><strong>Verify</strong> is the field that matters. It contains a command whose output changes when your work is correct &mdash; failing before the fix, succeeding after, or the reverse. If you find yourself writing &ldquo;manually check that&hellip;&rdquo; in that field, the task is not finished: you have not yet found the thing that proves it.</p>
+    </div>
+  </section>
+
+  <section id="t0" class="stack" style="padding-top:52px">
+    <div class="tier"><span class="n">0</span><div class="t"><h3>Foundation</h3><p>Weeks 1&ndash;2 &middot; both interns &middot; learn to see the system and to prove a claim</p></div></div>
+    <hr>
+
+    <div class="stack" style="gap:18px;margin-top:8px">
+
+      <article class="task" id="T01">
+        <div class="task-h"><span class="tid">T01</span>
+          <div class="task-ht"><h3>Map the attack surface</h3>
+            <div class="task-meta"><span class="trk both">Both</span><span class="chip">2 days</span><span class="chip">No code changes</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Produce a complete, evidence-based inventory of everything this system exposes &mdash; every listening port, every HTTP route, every MQTT topic, every credential &mdash; before forming any opinion about whether it is secure.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>You cannot defend what you have not enumerated, and almost every real breach begins with something nobody knew was listening. Finding F1 in our own audit was exactly this: a health endpoint on <code>0.0.0.0</code> that everyone had forgotten was published. An inventory built by reading code and probing a running system finds those; an inventory built from the architecture diagram never does.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Start the sandbox: <code>cd secure_robotstore &amp;&amp; make up</code>. Confirm it is healthy.</li>
+            <li>Enumerate listening sockets on the host and note which bind <code>0.0.0.0</code> versus <code>127.0.0.1</code>. Explain, for each, who can reach it from where.</li>
+            <li>Enumerate HTTP routes from the live OpenAPI document at <code>localhost:8001/docs</code>, then cross-check against the source &mdash; note anything reachable that is not documented.</li>
+            <li>Enumerate MQTT topics by subscribing to <code>#</code> and watching for sixty seconds. Compare what you observe against the topic modules in the source.</li>
+            <li>Find every credential in the repository: passwords, tokens, keys, defaults. Record where each is defined and where it is consumed.</li>
+            <li>Repeat steps 2&ndash;4 against the main stack (<code>docker compose up</code> at the repository root) and note every difference.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>A single Markdown table lists every port, route and topic with its authentication status and its binding interface.</li>
+            <li>Every entry cites the file and line that creates it &mdash; no entry is there because you assumed it.</li>
+            <li>You can name, without looking, which three exposures you would fix first and why.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre><span class="c"># every listening socket, and what is behind it</span>
+ss -tlnp | sort -k4
+docker compose ps --format '{{.Name}}\t{{.Ports}}'
+
+<span class="c"># every route the API actually serves</span>
+curl -s localhost:8001/openapi.json | python3 -c \
+  'import sys,json;[print(m.upper(),p) for p,o in json.load(sys.stdin)["paths"].items() for m in o]'
+
+<span class="c"># every topic in use, live</span>
+docker run --rm --network secure-robotstore_secure-robotstore-net eclipse-mosquitto:2 \
+  mosquitto_sub -h mosquitto -t '#' -v</pre></div>
+          <div class="ref">
+            <span><b>Deliverable</b> <code>docs/attack-surface.md</code></span>
+            <span><b>Reference</b> <code>docs/security-findings.md</code> &sect;F1</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T02">
+        <div class="task-h"><span class="tid">T02</span>
+          <div class="task-ht"><h3>Prove three vulnerabilities and write them up</h3>
+            <div class="task-meta"><span class="trk both">Both</span><span class="chip">2 days</span><span class="sev hi">TH-01</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Demonstrate, against the running sandbox, that an unauthenticated attacker can forge robot data, read all traffic, and call the API &mdash; then write each one up to the standard our own audit uses.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>Writing a finding well is a distinct skill from finding it, and it is the one that determines whether anything gets fixed. A report that says &ldquo;MQTT is insecure&rdquo; is ignored. A report that shows a forged row landing in the system of record, names the file and line that allowed it, and states the impact in terms a non-engineer understands, gets prioritised the same week.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Run <code>make verify-holes</code> and read what it does &mdash; it is three commands, not a magic script.</li>
+            <li>Reproduce each by hand so you understand every flag. Capture the output.</li>
+            <li>For the forged reading, follow it all the way through: confirm it in Redis, in Postgres, and arriving in an open browser window. That whole path is the impact.</li>
+            <li>Trace each vulnerability to the specific line that permits it, and to the design decision behind that line.</li>
+            <li>Write three findings: summary, severity with justification, reproduction steps, affected file and line, impact, suggested fix, and how to verify the fix.</li>
+            <li>Rate each one yourself before looking at how we rated it, then compare and account for the difference.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>Three findings written, each reproducible by someone else using only your steps.</li>
+            <li>Each cites a file and line, not a component name.</li>
+            <li>Impact is stated in terms of what happens to a school, not what happens to a process.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre><span class="c"># 1 — forge a reading with no credentials at all</span>
+docker run --rm --network secure-robotstore_secure-robotstore-net eclipse-mosquitto:2 \
+  mosquitto_pub -h mosquitto -t devices/demo-device-01/int -m '{"value":999,"seq":999999}'
+
+<span class="c"># it is now permanently in the system of record</span>
+docker exec sr-postgres psql -U robotstore -d robotstore \
+  -c "SELECT * FROM int_readings WHERE seq = 999999;"
+
+<span class="c"># 3 — the API needs no token</span>
+curl -s -o /dev/null -w "%{http_code}\n" localhost:8001/api/string/history</pre></div>
+          <div class="ref">
+            <span><b>Deliverable</b> three findings in <code>docs/findings/</code></span>
+            <span><b>Reference</b> <code>docs/security-findings.md</code></span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T03">
+        <div class="task-h"><span class="tid">T03</span>
+          <div class="task-ht"><h3>Build the threat model yourself</h3>
+            <div class="task-meta"><span class="trk both">Both</span><span class="chip">3 days</span><span class="chip">Design</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Draw the system&rsquo;s data flows, mark the trust boundaries, and apply STRIDE at each boundary to produce your own threat register &mdash; independently, before reading section&nbsp;08 of this document again.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>A threat model you were handed is a document. A threat model you built is a way of thinking, and it transfers to every system you work on afterwards. This is also the task where you will discover threats this document missed &mdash; two fresh readers with no assumptions routinely find things the people who built a system cannot see any more.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Draw the data flow diagram from the code, not from the architecture docs. Every process, every data store, every flow between them.</li>
+            <li>Mark every place where data crosses from one trust level to another. Justify each boundary in one sentence.</li>
+            <li>At each boundary, work through all six STRIDE categories and write at least one concrete threat for each that applies &mdash; concrete meaning it names a topic, route or file.</li>
+            <li>Rate each threat by impact and likelihood. Impact is harm to people and schools, not technical severity.</li>
+            <li>Now compare with section&nbsp;08. For every difference, decide which of you is right and write down why.</li>
+            <li>Bring the differences to your supervisor. The ones where you are right go into the real register.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>A data flow diagram with boundaries, generated from reading source.</li>
+            <li>At least twenty concrete threats, each naming a specific file, route or topic.</li>
+            <li>A written reconciliation against section&nbsp;08, including at least one threat this document does not contain.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><p class="small" style="color:var(--muted)">Peer review: your track partner must be able to take your diagram alone and independently arrive at three of your threats without being told them. If they cannot, the diagram is not yet showing the mechanism.</p></div>
+          <div class="ref">
+            <span><b>Deliverable</b> <code>docs/threat-model.md</code> + diagram</span>
+            <span><b>Reference</b> sections 01&ndash;05 of this pack</span>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section id="t1" class="stack" style="padding-top:52px">
+    <div class="tier"><span class="n">1</span><div class="t"><h3>Core &mdash; the two halves of the perimeter</h3><p>Weeks 3&ndash;6 &middot; tracks split &middot; rebuild authentication and authorisation from nothing</p></div></div>
+    <hr>
+
+    <div class="stack" style="gap:18px;margin-top:8px">
+
+      <article class="task" id="T04">
+        <div class="task-h"><span class="tid">T04</span>
+          <div class="task-ht"><h3>Give every MQTT client its own identity</h3>
+            <div class="task-meta"><span class="trk a">Track A</span><span class="chip">3 days</span><span class="chip">B3</span><span class="sev cr">TH-01</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Turn off anonymous access at the broker and give the agent and the backend separate credentials, sourced from the environment and never committed.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>This is the single largest hole in the sandbox and the foundation every later control rests on. Authorisation is meaningless without identity: an ACL cannot scope a client to its own topics if the broker does not know which client it is. Right now anyone who can reach port 1883 is implicitly the most trusted party in the system.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Set <code>allow_anonymous false</code> and add a <code>password_file</code> to the broker config.</li>
+            <li>Generate the password file at container start from environment variables, so no plaintext ever enters git. Read <code>docker-entrypoint-wrapper.sh</code> in the main stack for the pattern &mdash; it exists for exactly this reason.</li>
+            <li>Create two identities with different passwords: one for the agent, one for the backend.</li>
+            <li>Call <code>username_pw_set()</code> before <code>connect_async()</code> in both clients. The <code>INTERN TASK</code> comments mark the exact place.</li>
+            <li>Plumb the credentials through compose and the settings modules. No defaults that work.</li>
+            <li>Restart and confirm both legitimate clients reconnect &mdash; then confirm an anonymous one cannot.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>Anonymous publish and subscribe are both refused by the broker.</li>
+            <li>Agent and backend hold distinct credentials and both still work.</li>
+            <li>No password appears anywhere in git history or in a committed file.</li>
+            <li>A wrong credential produces a clear log line, not silence.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre><span class="c"># must now FAIL</span>
+docker run --rm --network secure-robotstore_secure-robotstore-net eclipse-mosquitto:2 \
+  mosquitto_pub -h mosquitto -t devices/demo-device-01/int -m '{"value":1,"seq":1}'
+
+<span class="c"># must still be true — the real clients are unaffected</span>
+curl -s localhost:8001/health/detail | python3 -m json.tool   <span class="c"># mqtt.connected: true</span>
+curl -s localhost:8081                                        <span class="c"># mqtt_connected: true</span></pre></div>
+          <div class="ref">
+            <span><b>Watch for</b> paho retries forever in the background &mdash; a wrong password looks like silence, not an error. Read the broker log.</span>
+            <span><b>Reference</b> <code>cloud-container/mosquitto/</code></span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T05">
+        <div class="task-h"><span class="tid">T05</span>
+          <div class="task-ht"><h3>Enforce direction with a topic ACL</h3>
+            <div class="task-meta"><span class="trk a">Track A</span><span class="chip">3 days</span><span class="chip">B3</span><span class="sev cr">TH-01</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Restrict each identity to the topics its role legitimately needs, in the direction it legitimately needs them &mdash; the device writes telemetry and reads commands; the backend writes commands and reads telemetry.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>Authentication proves who a client is; it does nothing about what they may then do. Without an ACL, a compromised backend can fabricate a robot&rsquo;s self-reported state, and anything holding the device credential can publish commands to every other device. This is the control that contains a breach to one machine instead of the fleet &mdash; see section&nbsp;03.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Write an <code>acl_file</code> granting the backend read on telemetry topics and write on the command topic &mdash; and explicitly not write on telemetry.</li>
+            <li>Use a <code>pattern</code> rule with <code>%u</code> so each device is scoped to its own namespace automatically. Understand why this means adding a device never edits the ACL file.</li>
+            <li>Reload the broker and confirm normal operation is untouched.</li>
+            <li>Attempt each of the four forbidden combinations and confirm all four are refused.</li>
+            <li>Write down what an attacker holding the device credential can still do. That residual is the input to T14.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>The backend identity cannot publish telemetry, status or health.</li>
+            <li>The device identity cannot publish to the command topic.</li>
+            <li>Neither identity can subscribe to a topic outside its role.</li>
+            <li>Real telemetry and real commands both still flow.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre><span class="c"># backend identity forging device telemetry — must be refused</span>
+mosquitto_pub -h localhost -p 1884 -u backend -P "$MQTT_BACKEND_PASSWORD" \
+  -t devices/demo-device-01/string -m '{"value":"forged","seq":1}'
+
+<span class="c"># device identity issuing a command — must be refused</span>
+mosquitto_pub -h localhost -p 1884 -u demo-device-01 -P "$MQTT_DEVICE_PASSWORD" \
+  -t devices/demo-device-01/cmd -m '{"action":"drive"}'</pre></div>
+          <div class="ref">
+            <span><b>Deliverable</b> ACL file + a table of what each role may do</span>
+            <span><b>Reference</b> <code>cloud-container/mosquitto/aclfile</code></span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T06">
+        <div class="task-h"><span class="tid">T06</span>
+          <div class="task-ht"><h3>Bound every input that crosses the wire</h3>
+            <div class="task-meta"><span class="trk a">Track A</span><span class="chip">3 days</span><span class="chip">B2 &middot; B3</span><span class="sev hi">TH-06 TH-10</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Cap payload size at the broker, at the backend before parsing, and at the value level in the store &mdash; three layers, because each catches what the others cannot.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>The backend parses every inbound message with <code>json.loads</code> on the single asyncio event loop that serves every WebSocket client in the system. One oversized payload from one client stalls telemetry for every school at once. This was finding F2, rated high, and the fix is four lines of config plus a length check &mdash; a good demonstration that severity and effort are unrelated.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Measure the largest legitimate message your system sends. Derive the limit from that, with headroom &mdash; do not pick a round number.</li>
+            <li>Set <code>message_size_limit</code>, <code>max_connections</code>, <code>max_queued_messages</code>, <code>max_inflight_messages</code> and <code>max_keepalive</code> at the broker. Write a comment explaining each number.</li>
+            <li>Add a byte-length check in the MQTT service <em>before</em> <code>json.loads</code>, not after.</li>
+            <li>Add a value-length cap in the store for payloads that are small enough to parse but still unreasonable.</li>
+            <li>Test the boundary exactly: one byte under, exactly at, one byte over.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>An oversized publish is dropped and never reaches Postgres.</li>
+            <li>Normal readings continue flowing throughout the attack.</li>
+            <li>A test covers the exact boundary, and another asserts the ceiling itself stays sane.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre><span class="c"># attach a subscriber first — mosquitto_pub exits 0 even when the broker drops the message,</span>
+<span class="c"># so exit codes prove nothing here. Delivery is the only honest test.</span>
+python3 -c "print('{\"value\":\"' + 'A'*5000000 + '\",\"seq\":424242}')" &gt; /tmp/huge.json
+mosquitto_pub -h localhost -p 1884 -t devices/demo-device-01/string -f /tmp/huge.json
+
+docker exec sr-postgres psql -U robotstore -d robotstore \
+  -c "SELECT count(*) FROM string_readings WHERE seq = 424242;"   <span class="c"># must be 0</span>
+curl -s localhost:8001/health/detail   <span class="c"># backend still healthy</span></pre></div>
+          <div class="ref">
+            <span><b>Watch for</b> exit codes lie here. Verify by delivery, with a subscriber attached.</span>
+            <span><b>Reference</b> <code>docs/security-findings.md</code> &sect;F2, &sect;F4</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T07">
+        <div class="task-h"><span class="tid">T07</span>
+          <div class="task-ht"><h3>Encrypt the device link</h3>
+            <div class="task-meta"><span class="trk a">Track A</span><span class="chip">4 days</span><span class="chip">B3</span><span class="sev hi">TH-03</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Move MQTT onto a TLS listener on 8883 with certificate verification on both clients, and keep it working after a restart.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>T04 gave every client a password. Without TLS, that password crosses campus Wi&#8209;Fi in plaintext on every connect &mdash; so anyone running a packet capture in the same building now has it, and T04&rsquo;s work is undone. Encryption and authentication are not alternatives; one without the other is a false sense of security.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Generate a development CA and server certificate. Read <code>scripts/generate-dev-certs.sh</code> rather than inventing the process.</li>
+            <li>Add a TLS listener on 8883 with the CA and certificate configured.</li>
+            <li>Call <code>tls_set()</code> on both paho clients <em>before</em> <code>connect_async()</code>, and make the CA path configurable.</li>
+            <li>Make the port and TLS mode configuration, not code &mdash; enabling TLS in production must not require a code change.</li>
+            <li>Prove encryption by capturing traffic on both ports and comparing.</li>
+            <li>Then deliberately break it: point a client at a certificate that does not match and confirm it refuses rather than silently downgrades.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>Both clients connect over 8883 and the plaintext listener is closed or restricted.</li>
+            <li>A packet capture on the TLS port shows no readable topic names or payloads.</li>
+            <li>An untrusted certificate is rejected, with a log line saying so.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre><span class="c"># plaintext: readable. TLS: not.</span>
+sudo tcpdump -i any -A -c 40 'port 1884' | grep -c 'devices/'
+sudo tcpdump -i any -A -c 40 'port 8883' | grep -c 'devices/'    <span class="c"># expect 0</span>
+
+<span class="c"># a client with no CA must be refused, not downgraded</span>
+mosquitto_sub -h localhost -p 8883 -t 'devices/#' -v</pre></div>
+          <div class="ref">
+            <span><b>Watch for</b> paho applies TLS when the socket is created &mdash; <code>tls_set()</code> after <code>connect_async()</code> silently does nothing and you get a plaintext connection that looks fine.</span>
+            <span><b>Reference</b> <code>scripts/generate-dev-certs.sh</code>, &sect;F6</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T09">
+        <div class="task-h"><span class="tid">T09</span>
+          <div class="task-ht"><h3>Store and check credentials properly</h3>
+            <div class="task-meta"><span class="trk b">Track B</span><span class="chip">3 days</span><span class="chip">B1</span><span class="sev me">TH-08</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Replace the plaintext credential dictionary with hashed storage, a constant-time comparison, and one generic failure message for every kind of failure.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>The current login tells an attacker whether a username exists before they try a single password &mdash; free user enumeration. It then compares the password with <code>==</code>, which returns faster the earlier it finds a mismatch, leaking the same information through timing even after you fix the message. Both are small code changes and both are the difference between a login that resists an attacker and one that helps them.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Reproduce the enumeration: two requests, two different responses. Capture it.</li>
+            <li>Create a users table with a hashed password column. Use bcrypt or argon2 &mdash; never a bare SHA, and understand why the difference is deliberate slowness.</li>
+            <li>Replace the comparison with a constant-time one. Compare <em>both</em> fields that way, so a wrong username cannot be distinguished from a wrong password by timing either.</li>
+            <li>Return one identical response for every failure. No field names, no hints, same status code, same body.</li>
+            <li>Make sure a failure still costs the same amount of work when the user does not exist &mdash; otherwise the timing leak returns through the absent hash computation.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>Unknown user and wrong password produce byte-identical responses.</li>
+            <li>Passwords are stored hashed; the plaintext dictionary is gone.</li>
+            <li>Response times for the two failure cases are statistically indistinguishable.</li>
+            <li>A correct login still works and the frontend is unchanged.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre><span class="c"># these two responses must be identical, byte for byte</span>
+curl -s -X POST localhost:8001/auth/login -H 'Content-Type: application/json' \
+  -d '{"username":"operator","password":"wrong"}'
+curl -s -X POST localhost:8001/auth/login -H 'Content-Type: application/json' \
+  -d '{"username":"nobody","password":"wrong"}'
+
+<span class="c"># and so must their timing distributions</span>
+for u in operator nobody; do
+  curl -s -o /dev/null -w "$u %{time_total}\n" -X POST localhost:8001/auth/login \
+    -H 'Content-Type: application/json' -d "{\"username\":\"$u\",\"password\":\"x\"}"
+done</pre></div>
+          <div class="ref">
+            <span><b>Reference</b> <code>cloud-container/backend/app/auth/service.py</code></span>
+            <span><b>Note</b> the reference checks one configured credential; a users table is the extension it names.</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T10">
+        <div class="task-h"><span class="tid">T10</span>
+          <div class="task-ht"><h3>Issue tokens that cannot be forged</h3>
+            <div class="task-meta"><span class="trk b">Track B</span><span class="chip">3 days</span><span class="chip">B1</span><span class="sev hi">TH-07</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Replace the base64 blob with a signed JWT carrying subject, issued-at, expiry and a unique identifier, verified server-side against a secret that never leaves the server.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>The current token is the username in a costume &mdash; anyone can produce one in a single line of Python, and it never expires, so a session captured once is valid forever. A signature makes the token unforgeable; an expiry bounds the damage of a stolen one; the unique identifier is what makes revocation possible at all, since a stateless token otherwise cannot be cancelled before it expires naturally.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Mint the current token yourself in one line. Keep that line &mdash; it is your before-evidence.</li>
+            <li>Issue a signed JWT with <code>sub</code>, <code>iat</code>, <code>exp</code> and a random <code>jti</code>. Choose an expiry and write down your reasoning.</li>
+            <li>Keep signing and verification as pure functions with no framework dependency, so they can be unit tested without starting the app.</li>
+            <li>Load the signing secret from the environment. Refuse to start if it is missing or is a known default.</li>
+            <li>Add revocation: store the <code>jti</code> of a logged-out token in Redis with a TTL matching its remaining life, and reject tokens whose <code>jti</code> is listed.</li>
+            <li>Write tests for a tampered payload, an expired token, and a revoked one.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>A hand-crafted token is rejected.</li>
+            <li>An expired token is rejected without a restart.</li>
+            <li>Logging out invalidates a token immediately, not at its natural expiry.</li>
+            <li>The app refuses to start with a default signing secret.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre><span class="c"># before: minting an admin session without touching the server</span>
+python3 -c "import base64;print(base64.b64encode(b'operator:demo').decode())"
+
+<span class="c"># after: tamper with the payload and the signature check must fail</span>
+<span class="c"># (pair this with T11 — until a route validates, nothing here is observable)</span>
+curl -s -o /dev/null -w "%{http_code}\n" localhost:8001/api/int/latest \
+  -H "Authorization: Bearer $FORGED"    <span class="c"># expect 401</span></pre></div>
+          <div class="ref">
+            <span><b>Do with</b> T11 &mdash; a token nobody validates proves nothing.</span>
+            <span><b>Reference</b> <code>cloud-container/backend/app/auth/tokens.py</code></span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T11">
+        <div class="task-h"><span class="tid">T11</span>
+          <div class="task-ht"><h3>Authorise every route and every socket</h3>
+            <div class="task-meta"><span class="trk b">Track B</span><span class="chip">4 days</span><span class="chip">B1</span><span class="sev hi">TH-07</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Put a real authorisation check on every REST route and on both WebSocket upgrades &mdash; and solve the WebSocket handshake problem properly rather than putting a token in a URL.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p><strong>This is the most important task in Track B.</strong> T09 and T10 are worth nothing without it: a perfectly hashed password and a perfectly signed token protect nothing if no endpoint ever checks the result. Today the route guard in <code>App.tsx</code> hides the user interface and protects zero bytes &mdash; every socket and every route answers anyone with <code>curl</code>.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Prove the hole: read data from a socket and a REST route while signed out, from outside the browser entirely.</li>
+            <li>Add a dependency that turns a request into an authenticated identity or rejects it, and apply it to every route.</li>
+            <li>For WebSockets, understand the real constraint first: browsers cannot set headers on a WebSocket handshake, so something must travel in the URL.</li>
+            <li>Rather than the session token, issue a short-lived single-use ticket from an authenticated endpoint, consumed atomically on first use. Fifteen seconds is plenty.</li>
+            <li>Check the ticket <em>before</em> accepting the upgrade, not after.</li>
+            <li>Update the frontend: attach the bearer header on REST calls, fetch a ticket before opening each socket, and handle a rejected upgrade as a real state rather than an endless reconnect loop.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>Every REST route returns 401 without a valid token.</li>
+            <li>Both WebSocket upgrades are refused without a valid ticket.</li>
+            <li>A ticket cannot be used twice, and expires on its own.</li>
+            <li>The browser still works end to end: log in, both windows live.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre><span class="c"># both must fail before a token, succeed after</span>
+curl -s -o /dev/null -w "%{http_code}\n" localhost:8001/api/string/history
+
+python3 - &lt;&lt;'PY'
+import asyncio, websockets
+async def main():
+    try:
+        async with websockets.connect("ws://localhost:8001/ws/int_api") as ws:
+            print("REACHABLE WITH NO TOKEN:", (await ws.recv())[:60])
+    except Exception as e:
+        print("refused:", type(e).__name__)
+asyncio.run(main())
+PY
+
+<span class="c"># a ticket must be single-use — the second attempt must fail</span></pre></div>
+          <div class="ref">
+            <span><b>Deliverable</b> a short note on why a token in a query string is worse than a ticket</span>
+            <span><b>Reference</b> <code>cloud-container/backend/app/auth/dependencies.py</code></span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T12">
+        <div class="task-h"><span class="tid">T12</span>
+          <div class="task-ht"><h3>Make guessing expensive</h3>
+            <div class="task-meta"><span class="trk b">Track B</span><span class="chip">2 days</span><span class="chip">B1</span><span class="sev me">TH-08</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Add a Redis-backed failure counter and lockout to the login endpoint, and make sure your own test suite still passes afterwards.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>With one shared operator credential, brute force against the login endpoint is essentially the entire attack surface that authentication has to defend. A fixed window is the right amount of machinery here &mdash; this is one account being guessed at, not traffic shaping across millions of users, and choosing the simpler correct mechanism is itself the lesson.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Demonstrate the problem: two hundred attempts, timed, with no resistance.</li>
+            <li>Count failures per client IP in Redis with a TTL on the window.</li>
+            <li>On reaching the threshold, set a lockout key with its own TTL and reject every attempt while it lives &mdash; including correct ones.</li>
+            <li>Clear both keys on a successful login.</li>
+            <li>Choose the threshold and durations deliberately and write down the reasoning. Consider a classroom of thirty students mistyping passwords behind one NAT address.</li>
+            <li>Run the full test suite. When it breaks, understand why before fixing it.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>Repeated failures trigger a lockout that expires on its own.</li>
+            <li>A correct password during lockout is also refused &mdash; and you can explain why that is correct.</li>
+            <li>Successful login clears the counter.</li>
+            <li>The existing tests pass, or the reason they changed is documented.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre>for i in $(seq 1 30); do
+  curl -s -o /dev/null -w "%{http_code} " -X POST localhost:8001/auth/login \
+    -H 'Content-Type: application/json' \
+    -d "{\"username\":\"operator\",\"password\":\"guess$i\"}"
+done; echo
+<span class="c"># expect 401s, then 429s from the threshold onward</span></pre></div>
+          <div class="ref">
+            <span><b>Watch for</b> a rate limiter makes a test suite non-idempotent &mdash; that was finding F9, caused by this exact fix.</span>
+            <span><b>Reference</b> <code>cloud-container/backend/app/auth/rate_limit.py</code></span>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section id="t2" class="stack" style="padding-top:52px">
+    <div class="tier"><span class="n">2</span><div class="t"><h3>Standard &mdash; hardening the specifics</h3><p>Weeks 7&ndash;9 &middot; tracks continue &middot; the controls that need judgement, not just configuration</p></div></div>
+    <hr>
+
+    <div class="stack" style="gap:18px;margin-top:8px">
+
+      <article class="task" id="T08">
+        <div class="task-h"><span class="tid">T08</span>
+          <div class="task-ht"><h3>One key per robot, revocable alone</h3>
+            <div class="task-meta"><span class="trk a">Track A</span><span class="chip">4 days</span><span class="chip">B3</span><span class="sev hi">TH-02</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Replace the shared fleet password with a per-device X.509 client certificate, and build the operation that matters more than issuing one: revoking a single device without touching any other.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>Robots are portable, unattended, and used by children. Assume one will eventually be stolen, borrowed or simply opened. Today that single event hands an attacker the credential for <em>every</em> robot in every school, and the only remediation is a fleet-wide password rotation &mdash; which means visiting every device. Per-device identity turns a fleet-wide emergency into a single revocation. This is also exactly the model AWS IoT Core uses, so this task is the migration rehearsal.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Write down today&rsquo;s incident response for a stolen robot, honestly, step by step. That document is the justification for the whole task.</li>
+            <li>Issue a CA-signed client certificate per device, with the device identifier as the common name.</li>
+            <li>Configure the broker to require and verify client certificates, and to derive the MQTT username from the certificate rather than trusting a supplied one.</li>
+            <li>Confirm your existing ACL patterns still scope correctly now that identity comes from the certificate.</li>
+            <li>Build revocation and prove it: revoke one device, confirm it cannot reconnect, confirm every other device is unaffected.</li>
+            <li>Write the provisioning story &mdash; how a certificate gets onto a new robot without a human copying a private key over chat.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>Each device connects with its own certificate; no shared password remains.</li>
+            <li>Revoking one device denies it and only it, without a broker restart that disconnects others.</li>
+            <li>A device cannot claim another device&rsquo;s identity even if it edits its own config.</li>
+            <li>The provisioning and revocation runbooks are written down.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre><span class="c"># device A with device B's identity in its config — must still be refused,</span>
+<span class="c"># because identity comes from the certificate, not from what the client claims</span>
+mosquitto_pub -h localhost -p 8883 --cert deviceA.crt --key deviceA.key --cafile ca.crt \
+  -t devices/demo-device-02/int -m '{"value":1,"seq":1}'
+
+<span class="c"># after revoking A: A fails, B keeps running uninterrupted</span>
+curl -s localhost:8001/health/detail | python3 -m json.tool</pre></div>
+          <div class="ref">
+            <span><b>Deliverable</b> provisioning + revocation runbook</span>
+            <span><b>Reference</b> <code>docs/11-aws-migration.md</code> &mdash; IoT Core policy variables</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T13">
+        <div class="task-h"><span class="tid">T13</span>
+          <div class="task-ht"><h3>Close the robot&rsquo;s own front door</h3>
+            <div class="task-meta"><span class="trk a">Track A</span><span class="chip">2 days</span><span class="chip">B4</span><span class="sev cr">TH-05</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Make the robot&rsquo;s health and metrics endpoint safe to expose on a campus network: authenticated where it carries detail, and carrying no identity at all where it must stay open.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>This was finding F1, rated <strong>critical</strong>, and it is the most instructive bug in our history. The endpoint was &ldquo;just metrics&rdquo; &mdash; but it returned <code>robot_id</code>, and <code>robot_id</code> <em>is</em> the robot&rsquo;s MQTT username. An unauthenticated request therefore returned half of a valid credential pair, and with a fleet-wide shared password, half is all you need. It also reported whether commands were flowing and whether anyone was watching video: target selection and timing, served to anyone who asked.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Read F1 in full before writing any code, including the part that admits it was missed by an earlier hardening pass.</li>
+            <li>Bind the port to loopback in compose, and understand why that is a first step rather than a fix &mdash; on real hardware the agent sits on the campus LAN, where loopback does not apply.</li>
+            <li>Split the endpoint. Keep liveness open and content-free, so orchestrator probes keep working. Move everything with detail behind a bearer token compared in constant time.</li>
+            <li>Ensure the endpoint that stays open leaks <em>no</em> identity &mdash; the one endpoint that must remain reachable is exactly the one that must carry nothing.</li>
+            <li>Log loudly at startup when no token is configured, so an open deployment is never silent.</li>
+            <li>Write a test asserting the open endpoint never returns the robot identifier, whatever else changes.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>The detailed endpoint requires a token; the open one returns liveness only.</li>
+            <li>No response on the open path contains the robot identifier under any configuration.</li>
+            <li>Container health checks and the existing <code>make health</code> target still work.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre><span class="c"># from another machine on the network — must fail</span>
+curl -s -m 5 http://&lt;robot-ip&gt;:8080/metrics
+
+<span class="c"># the open endpoint must be liveness only — this must print nothing</span>
+curl -s localhost:8081/health | grep -i 'device_id\|robot_id\|mqtt'</pre></div>
+          <div class="ref">
+            <span><b>Reference</b> <code>docs/security-findings.md</code> &sect;F1</span>
+            <span><b>Lesson</b> ask of every endpoint: what does this reveal that is also a credential?</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T14">
+        <div class="task-h"><span class="tid">T14</span>
+          <div class="task-ht"><h3>Make a command provable, not merely delivered</h3>
+            <div class="task-meta"><span class="trk a">Track A</span><span class="chip">5 days</span><span class="chip">B3</span><span class="sev hi">TH-04</span><span class="chip on">Flagship</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Wrap every command in a signed envelope carrying the authorising operator, a unique nonce, an issue time and a short expiry &mdash; and make the robot reject anything replayed, stale or unsigned.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>This is the task that separates robotics security from web security, and it is the one to do properly. Your ACL work in T05 stops the wrong <em>client</em> from publishing. It does nothing about a command that was legitimate once: capture a &ldquo;drive forward&rdquo; message today, publish it again tomorrow, and the robot obeys &mdash; the bytes are genuine, the topic is right, the publisher is authorised. Nor does the ACL tell the robot <em>which human</em> authorised motion, which is what an audit trail needs to mean anything. &ldquo;This arrived over an authenticated channel&rdquo; is not &ldquo;a specific person asked for this, just now.&rdquo;</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Demonstrate the replay first. Subscribe, capture a real command, wait, publish it back verbatim, and watch the robot act on it. Record that.</li>
+            <li>Design the envelope: operator identity, nonce, issued-at, expiry, the command itself, and a signature over all of it. Decide what is signed and be able to justify excluding anything.</li>
+            <li>Sign on the cloud side when the command is issued. Verify on the robot before the command reaches any actuator code path.</li>
+            <li>Reject on a bounded freshness window &mdash; a command older than a small number of seconds is refused regardless of signature.</li>
+            <li>Keep a bounded nonce cache on the robot so a replay inside the freshness window is still refused. Bound it, and say what happens when it is full.</li>
+            <li>Handle clock skew deliberately. A robot with a wrong clock rejecting every command is a self-inflicted outage; write down how you detect and handle it.</li>
+            <li>Count and expose rejections by reason, so an attack in progress is visible rather than silent.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>A captured command replayed after the window is rejected.</li>
+            <li>A captured command replayed inside the window is rejected by nonce.</li>
+            <li>An unsigned or tampered command is rejected before reaching actuator code.</li>
+            <li>Every rejection is counted by reason and visible in metrics.</li>
+            <li>Normal teleoperation is unaffected, and you have measured the added latency.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre><span class="c"># capture a genuine command</span>
+mosquitto_sub -h localhost -p 8883 --cafile ca.crt -t 'devices/+/cmd' -C 1 &gt; captured.json
+
+<span class="c"># replay it verbatim — the robot must refuse, and say why</span>
+mosquitto_pub -h localhost -p 8883 --cafile ca.crt \
+  -t devices/demo-device-01/cmd -f captured.json
+
+<span class="c"># the rejection must be counted, not silent</span>
+curl -s -H "Authorization: Bearer $ROBOT_HEALTH_TOKEN" localhost:8081/metrics \
+  | grep -i 'rejected'</pre></div>
+          <div class="ref">
+            <span><b>Deliverable</b> envelope specification + threat notes on what it still does not stop</span>
+            <span><b>Next</b> what it does not stop is a correctly signed but unsafe command &mdash; that is T17</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T15">
+        <div class="task-h"><span class="tid">T15</span>
+          <div class="task-ht"><h3>Lock down the browser-facing edge</h3>
+            <div class="task-meta"><span class="trk b">Track B</span><span class="chip">2 days</span><span class="chip">B1</span><span class="sev me">Medium</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Replace the wildcard CORS policy with an explicit allowlist, and add response security headers at both the API and the static host &mdash; understanding what each one actually prevents.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>A wildcard origin means any website a signed-in student visits can call this API from their browser. The headers matter for a different reason: this API returns a bearer token on login, and without cache directives a proxy or the browser&rsquo;s own disk cache may retain it. These are cheap controls, which is exactly why skipping them is hard to justify later.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Show the current behaviour: a request with a foreign origin, and a response with no security headers at all.</li>
+            <li>Read the allowed origins from configuration as an explicit list. Never combine a wildcard with credentialed requests &mdash; find out what browsers do with that combination and why.</li>
+            <li>Add middleware setting content-type, framing, referrer, permissions and content-security-policy headers.</li>
+            <li>Add the equivalent directives at the static host for the frontend bundle.</li>
+            <li>Mark authentication responses as never cacheable.</li>
+            <li>For each header, write one sentence on what attack it stops. If you cannot, do not add it &mdash; unexplained headers are cargo cult.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>A foreign origin is refused; the real frontend origin works unchanged.</li>
+            <li>Headers are present on both the API and the frontend host.</li>
+            <li>Login responses carry no-store.</li>
+            <li>A one-line justification exists for every header added.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre>curl -sI localhost:8001/health | grep -iE 'x-frame|x-content|content-security|referrer|permissions'
+curl -sI localhost:3001/       | grep -iE 'x-frame|x-content|content-security'
+curl -s -o /dev/null -w "%{http_code}\n" -H "Origin: https://evil.example" \
+  localhost:8001/api/int/latest</pre></div>
+          <div class="ref">
+            <span><b>Reference</b> <code>cloud-container/backend/app/security_headers.py</code>, <code>cloud-container/frontend/nginx.conf</code></span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T16">
+        <div class="task-h"><span class="tid">T16</span>
+          <div class="task-ht"><h3>Make a bad secret impossible to deploy</h3>
+            <div class="task-meta"><span class="trk b">Track B</span><span class="chip">3 days</span><span class="chip">All</span><span class="sev hi">TH-11</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Generate every secret per environment, commit none of them, and make the application refuse to start in production if it is carrying a known default.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>The example environment file and the real one are currently identical, so every deployment of this system shares credentials with every other. The important half of this task is the startup guard, and it is the half people skip: a default credential that only fails at code review will eventually reach production, because code review is a human process that misses things. One that refuses to boot cannot.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Inventory every secret the system needs and where each is consumed.</li>
+            <li>Write a generator that produces strong values per environment, and document how to run it.</li>
+            <li>Strip working values from the example file &mdash; it documents names, never usable values.</li>
+            <li>Add a startup guard listing known-insecure defaults, which refuses to start when the environment claims to be production and any of them is in use.</li>
+            <li>Extend the guard to configurations that are dangerous regardless of value: a wildcard origin, disabled TLS, debug mode.</li>
+            <li>Scan git history for anything already committed. If you find something, treat it as exposed and rotate it &mdash; do not merely delete the file.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>A fresh checkout cannot start without generating secrets.</li>
+            <li>A production start carrying any default fails loudly, naming the offending setting.</li>
+            <li>Local development still starts with no manual steps beyond the generator.</li>
+            <li>Git history has been checked, and anything found is rotated.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre>ENVIRONMENT=production POSTGRES_PASSWORD=robotstore docker compose up backend
+<span class="c"># expect: immediate exit, naming POSTGRES_PASSWORD as an insecure default</span>
+
+<span class="c"># nothing sensitive has ever been committed</span>
+git log --all -p | grep -iE 'password|secret|api[_-]?key' | grep -v 'example\|CHANGE_ME'</pre></div>
+          <div class="ref">
+            <span><b>Reference</b> <code>scripts/generate-secrets.sh</code>, <code>config.py</code> &rarr; <code>assert_production_safe()</code></span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T22">
+        <div class="task-h"><span class="tid">T22</span>
+          <div class="task-ht"><h3>Make one school unable to see another</h3>
+            <div class="task-meta"><span class="trk b">Track B</span><span class="chip">5 days</span><span class="chip">B1</span><span class="sev hi">TH-12</span><span class="chip">Design-heavy</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Design and prototype tenant isolation so that a query which forgets to filter by tenant returns nothing, rather than returning another school&rsquo;s robots.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>One deployment will serve many institutions. Isolation that depends on every future contributor remembering a <code>WHERE</code> clause will eventually fail, and the failure will be one school able to enumerate &mdash; or drive &mdash; another&rsquo;s robots. The principle worth internalising: <strong>make the safe thing the default behaviour of the datastore, not a rule people must follow.</strong></p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Add a tenant identifier to every tenant-owned table.</li>
+            <li>Enable row-level security with a policy per table, driven by a session variable set once per request.</li>
+            <li>Connect as a role that does not own the tables &mdash; find out why this matters, because row-level security is bypassed by owners and superusers.</li>
+            <li>Derive the tenant from the signed token only. Never from a request parameter, a header, or anything a client can choose.</li>
+            <li>Prefix Redis keys and scope MQTT topics by tenant so isolation holds in every store, not just the relational one.</li>
+            <li>Write the test that matters: a deliberately unfiltered query, asserted to return zero rows.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>A query with no tenant filter returns nothing rather than everything.</li>
+            <li>The tenant cannot be influenced by any client-supplied value.</li>
+            <li>Isolation is demonstrated in Postgres, Redis and MQTT independently.</li>
+            <li>A test exists that fails if row-level security is ever disabled.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre><span class="c"># as the application role, with tenant A's context set:</span>
+SET app.tenant_id = 'school-a';
+SELECT count(*) FROM robots;                  <span class="c"># only school A's</span>
+SELECT count(*) FROM robots WHERE true;       <span class="c"># still only school A's</span>
+<span class="c"># with no tenant context set at all: expect 0, never all rows</span></pre></div>
+          <div class="ref">
+            <span><b>Reference</b> <code>docs/target-architecture.md</code> &sect;D1</span>
+            <span><b>Note</b> a prototype in the sandbox is a complete answer; production rollout is not expected.</span>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section id="t3" class="stack" style="padding-top:52px">
+    <div class="tier"><span class="n">3</span><div class="t"><h3>Cyber-physical &amp; operations</h3><p>Weeks 10&ndash;12 &middot; both interns, paired &middot; the problems that sit on the seam and the ones that never finish</p></div></div>
+    <hr>
+
+    <div class="stack" style="gap:18px;margin-top:8px">
+
+      <article class="task" id="T17">
+        <div class="task-h"><span class="tid">T17</span>
+          <div class="task-ht"><h3>The stop that always works</h3>
+            <div class="task-meta"><span class="trk both">Both, paired</span><span class="chip">5 days</span><span class="chip">B4</span><span class="sev cr">TH-16</span><span class="chip on">Most important</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Guarantee that the robot comes to a safe stop under every failure mode &mdash; broker down, network partitioned, agent crashed, operator gone &mdash; and that the guarantee holds without any working network connection.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>This is the last layer in section&nbsp;05, and the only one that must survive the failure of everything above it. Every other control in this pack assumes some part of the system is working; this one assumes none of it is. A design principle of this platform states it directly: <strong>safety degrades downward, never upward</strong>. An emergency stop implemented as a cloud API call is not an emergency stop &mdash; it is a feature that works when you least need it to fail.</p><p>Note where this sits relative to T14. A signed, fresh, correctly authorised command can still be an unsafe one. Authenticity is not safety, and no amount of cryptography substitutes for a bound on velocity.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Measure reality first. In simulation, start the robot moving and kill the broker. Time how long it keeps going. Record the number before you change anything.</li>
+            <li>Repeat for each failure mode separately: broker stopped, network partitioned with the broker alive, agent process killed, container out of memory, operator browser closed mid-drive.</li>
+            <li>Implement a watchdog in the agent: absent a fresh command within a stated interval, command zero velocity. Choose the interval from measured round-trip latency, not from a guess.</li>
+            <li>Bound velocity and acceleration in the agent regardless of what is commanded, so a malformed or hostile value cannot exceed a physical envelope.</li>
+            <li>Establish that the physical emergency stop cuts motor power in hardware, independent of software. Confirm it, do not assume it.</li>
+            <li>Write the safety case: each failure mode, the mechanism that handles it, and the measured time to stop.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>Every failure mode results in a stopped robot within a stated, measured bound.</li>
+            <li>The watchdog is proven by test, not by reading the code.</li>
+            <li>A command exceeding the velocity envelope is clamped and the event recorded.</li>
+            <li>The physical stop is confirmed to work with the agent process killed.</li>
+            <li>The safety case is written down and reviewed by your supervisor.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre><span class="c"># simulation only, wheels clear — never with anyone within reach</span>
+<span class="c"># 1. start motion  2. kill the broker  3. measure time to zero velocity</span>
+docker compose stop mosquitto
+ros2 topic echo /cmd_vel --once     <span class="c"># expect zeros within the stated window</span>
+
+<span class="c"># a hostile velocity must be clamped, and the clamp must be recorded</span>
+<span class="c"># publish a command with an absurd linear velocity and confirm both</span></pre></div>
+          <div class="ref">
+            <span><b>Safety</b> section 09 hardware protocol applies in full. Simulation, then blocks, then floor with a second person on the physical stop.</span>
+            <span><b>Deliverable</b> <code>docs/safety-case.md</code></span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T18">
+        <div class="task-h"><span class="tid">T18</span>
+          <div class="task-ht"><h3>Make the record tamper-evident</h3>
+            <div class="task-meta"><span class="trk both">Both</span><span class="chip">3 days</span><span class="chip">Forensics</span><span class="sev me">TH-13</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Record every authentication event and every command in an append-only, hash-chained log, and build the tool that detects tampering.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>After an incident involving a machine that moved near a child, the first question is &ldquo;who commanded this, and when?&rdquo; A line in application logs does not survive log rotation, a restarted container, or anyone with disk access and a text editor. Chaining each entry to the hash of the previous one means editing or deleting any record breaks every hash after it &mdash; so tampering becomes detectable by recomputation, without needing signatures or external log shipping.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Decide what is worth recording: authentication outcomes, command issuance, video session claims, authorisation failures. Recording everything is the same as recording nothing.</li>
+            <li>Define the entry and compute each hash over the previous hash plus the canonical serialisation of the row.</li>
+            <li>Serialise canonically with sorted keys &mdash; otherwise identical data produces different hashes and the chain breaks for no reason.</li>
+            <li>Serialise appends so two concurrent writers cannot both chain from the same previous hash. A database advisory lock is the mechanism; insertion order alone is not enough.</li>
+            <li>Write the verifier that walks the chain and reports the first broken link.</li>
+            <li>Prove it: edit a row directly and confirm the verifier detects it and names the row.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>Authentication events and commands are recorded with actor, action, result and time.</li>
+            <li>The verifier passes on an untouched chain.</li>
+            <li>A single edited, deleted or reordered row is detected and located.</li>
+            <li>Concurrent writes do not corrupt the chain under load.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre>python3 scripts/verify-audit-log.py          <span class="c"># expect: chain intact, N entries</span>
+
+docker exec sr-postgres psql -U robotstore -d robotstore \
+  -c "UPDATE audit_log SET actor='someone-else' WHERE id = 5;"
+
+python3 scripts/verify-audit-log.py          <span class="c"># expect: break detected at entry 5</span></pre></div>
+          <div class="ref">
+            <span><b>Reference</b> <code>cloud-container/backend/app/audit/logger.py</code></span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T19">
+        <div class="task-h"><span class="tid">T19</span>
+          <div class="task-ht"><h3>See an attack while it is happening</h3>
+            <div class="task-meta"><span class="trk both">Both</span><span class="chip">4 days</span><span class="chip">Detection</span><span class="sev hi">TH-09</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Turn the rejection counters you have been building into detection: rules that fire on the signatures of an attack in progress, and an alert a human actually receives.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>Every task so far has been prevention, and prevention eventually fails &mdash; a credential leaks, a control is misconfigured, a new endpoint ships without a check. Detection is what bounds how long a failure goes unnoticed. You have already instrumented the right places: signature rejections in T14, lockouts in T12, viewer conflicts in the video path. The work here is turning counters into questions worth waking someone up for.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>List the signals you already emit, then write down what each looks like under normal use for a full school day. Without a baseline, every threshold is a guess.</li>
+            <li>Write detection rules with reasons: a burst of signature failures on one device, a robot publishing telemetry while reporting itself offline, commands arriving for a robot with no active operator session, a sequence gap that indicates dropped or injected messages.</li>
+            <li>Add plausibility checks on telemetry &mdash; a battery that rises while driving, a position that jumps further than the robot can physically travel.</li>
+            <li>Review the video path specifically: confirm the rate limit and viewer lock behave under concurrency, not just sequentially.</li>
+            <li>Route alerts somewhere a person reads. An alert nobody sees is a log line.</li>
+            <li>Tune for false positives against real usage. An alert that cries wolf is worse than none, because it trains people to ignore the real one.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>At least five detection rules, each with a written rationale and threshold justification.</li>
+            <li>Each rule demonstrated firing on a simulated attack.</li>
+            <li>False positive rate measured against a day of normal traffic.</li>
+            <li>Alerts reach a human through a real channel.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre><span class="c"># simulate each attack and confirm the matching rule fires</span>
+<span class="c"># replay burst -> signature-failure rule</span>
+<span class="c"># credential stuffing -> lockout rule</span>
+<span class="c"># forged telemetry -> plausibility rule</span>
+
+<span class="c"># concurrency matters: 8 simultaneous offers, not 8 sequential ones —</span>
+<span class="c"># a sequential test spans the whole window and proves nothing</span>
+seq 8 | xargs -P8 -I{} curl -s -o /dev/null -w "%{http_code} " \
+  -X POST localhost:8000/robots/demo-01/webrtc/offer -H "Authorization: Bearer $TOKEN"</pre></div>
+          <div class="ref">
+            <span><b>Reference</b> <code>docs/security-findings.md</code> &sect;F3 &mdash; including why the first test looked like a broken limiter</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T20">
+        <div class="task-h"><span class="tid">T20</span>
+          <div class="task-ht"><h3>Harden the containers and the cloud posture</h3>
+            <div class="task-meta"><span class="trk both">Both</span><span class="chip">3 days</span><span class="chip">Infra</span><span class="sev me">TH-14</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Run every container as a non-root user with no privilege escalation and explicit resource limits, bind nothing publicly that need not be, and review the AWS posture against least privilege.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>These controls do not stop an intrusion; they bound what an intrusion becomes. A process that is compromised as root in a container with the host&rsquo;s display socket mounted read-write is a different incident from one compromised as an unprivileged user with a read-only filesystem and a memory limit. In the cloud half, the equivalent question is what a single leaked task credential can reach.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Establish the baseline: which containers run as root, what is bound publicly, what has no resource limit.</li>
+            <li>Add an unprivileged user to each image and switch to it. Expect file permission breakage and fix it properly rather than by widening permissions.</li>
+            <li>Set no-new-privileges, drop unnecessary capabilities, and make filesystems read-only where the service allows.</li>
+            <li>Add memory and CPU limits derived from observed usage, so one runaway container cannot starve the host.</li>
+            <li>Bind databases and the broker to loopback. Only the frontend and the API have a reason to be reachable.</li>
+            <li>For AWS: write the least-privilege policy each component actually needs, restrict security groups to the specific ports and sources required, and confirm secrets come from a secrets manager rather than task definition environment variables.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>No container runs as root; the stack still comes up clean.</li>
+            <li>Databases and the broker are not reachable from outside the host.</li>
+            <li>Every service has a memory limit derived from a measurement.</li>
+            <li>A written review names what one leaked cloud credential could reach, and what was narrowed.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre>for c in $(docker compose ps --format '{{.Name}}'); do
+  printf '%-16s %s\n' "$c" "$(docker exec "$c" whoami 2>/dev/null || echo n/a)"
+done
+<span class="c"># expect: no root anywhere</span>
+
+ss -tlnp | grep -E '5433|6380|1884'    <span class="c"># expect 127.0.0.1, never 0.0.0.0</span>
+docker stats --no-stream --format '{{.Name}}\t{{.MemUsage}}'</pre></div>
+          <div class="ref">
+            <span><b>Reference</b> root <code>docker-compose.yml</code>, <code>docs/11-aws-migration.md</code>, &sect;F5</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="task" id="T21">
+        <div class="task-h"><span class="tid">T21</span>
+          <div class="task-ht"><h3>Know what you ship</h3>
+            <div class="task-meta"><span class="trk both">Both</span><span class="chip">3 days</span><span class="chip">Supply chain</span><span class="sev me">TH-15</span></div>
+          </div>
+        </div>
+        <div class="task-b">
+          <div class="fld"><h5>Objective</h5><p>Produce a bill of materials for every image, scan dependencies and base images for known vulnerabilities, and wire the scan into continuous integration so it runs without anyone remembering.</p></div>
+          <div class="fld"><h5>Why it matters</h5><p>Most of the code running in production was written by strangers and pulled in by a package manager. That is normal and unavoidable; what is avoidable is not knowing which strangers, or finding out about a critical advisory in a library you ship because a customer told you. The robot image is the sharpest case: it carries ROS2, GStreamer and a stack of C libraries, and it runs on the least-patched machine in the system.</p></div>
+          <div class="fld"><h5>Steps</h5><ol>
+            <li>Generate a software bill of materials for each image.</li>
+            <li>Scan Python and JavaScript dependencies and the base images. Record the current count by severity &mdash; that is your baseline.</li>
+            <li>Triage: for each high or critical finding, decide whether it is reachable in our usage. Not every vulnerability in a shipped library is exploitable in your code, and saying so with reasons is the skill.</li>
+            <li>Pin what is not pinned. An unpinned dependency means your build is not reproducible and a compromised release lands silently.</li>
+            <li>Add the scan to continuous integration with a threshold that fails the build, and a documented exception process for accepted findings.</li>
+            <li>Write the update policy: who checks, how often, and how an emergency patch reaches a fleet of robots at the edge.</li>
+          </ol></div>
+          <div class="fld"><h5>Done when</h5><ul class="dw">
+            <li>A bill of materials exists for every image and is regenerated by the build.</li>
+            <li>Scans run in CI and fail the build above an agreed threshold.</li>
+            <li>Every current high or critical finding is triaged with a written decision.</li>
+            <li>The update and emergency-patch policy is documented.</li>
+          </ul></div>
+          <div class="fld"><h5>Verify</h5><pre>pip-audit -r cloud-container/backend/requirements.txt
+npm audit --prefix cloud-container/frontend --audit-level=high
+trivy image cloud-robotics-backend:latest --severity HIGH,CRITICAL
+
+<span class="c"># and the point of the task: it runs without anyone remembering</span>
+git commit --allow-empty -m "trigger CI" &amp;&amp; gh run watch</pre></div>
+          <div class="ref">
+            <span><b>Deliverable</b> <code>docs/supply-chain.md</code> + a CI workflow</span>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section id="s15" class="stack" style="padding-top:56px">
+    <div class="sechead"><div class="bar"></div><p class="snum">15</p><h2>Cadence and assessment</h2></div>
+
+    <div class="prose stack">
+      <p>Twelve weeks, two people, twenty-two tasks. The schedule below is a plan, not a contract &mdash; a task that turns out to be deeper than expected is a finding in itself, and the right response is to say so, not to rush it.</p>
+    </div>
+
+    <div class="tw">
+      <table style="min-width:720px">
+        <thead><tr><th class="nw">Week</th><th>Intern A &middot; Device &amp; Transport</th><th>Intern B &middot; Identity &amp; Cloud</th><th class="nw">Milestone</th></tr></thead>
+        <tbody>
+          <tr><td class="nw"><strong>1&ndash;2</strong></td><td colspan="2" style="text-align:center;color:var(--muted)"><code>T01</code> map the attack surface &middot; <code>T02</code> prove three holes &middot; <code>T03</code> build the threat model &mdash; together</td><td class="nw">Threat model reviewed</td></tr>
+          <tr><td class="nw"><strong>3&ndash;4</strong></td><td><code>T04</code> MQTT identity &middot; <code>T05</code> topic ACL</td><td><code>T09</code> credential storage &middot; <code>T10</code> signed tokens</td><td class="nw">Anonymous access closed</td></tr>
+          <tr><td class="nw"><strong>5&ndash;6</strong></td><td><code>T06</code> input limits &middot; <code>T07</code> TLS</td><td><code>T11</code> authorise everything &middot; <code>T12</code> rate limiting</td><td class="nw">Perimeter complete</td></tr>
+          <tr><td class="nw"><strong>7&ndash;8</strong></td><td><code>T08</code> per-device certs &middot; <code>T13</code> robot surface</td><td><code>T15</code> browser edge &middot; <code>T16</code> secrets</td><td class="nw">Fleet compromise contained</td></tr>
+          <tr><td class="nw"><strong>9</strong></td><td><code>T14</code> signed command envelope</td><td><code>T22</code> tenant isolation</td><td class="nw">Replay defeated</td></tr>
+          <tr><td class="nw"><strong>10</strong></td><td colspan="2" style="text-align:center;color:var(--muted)"><code>T17</code> the stop that always works &mdash; paired</td><td class="nw">Safety case written</td></tr>
+          <tr><td class="nw"><strong>11</strong></td><td colspan="2" style="text-align:center;color:var(--muted)"><code>T18</code> tamper-evident audit &middot; <code>T19</code> detection</td><td class="nw">Attacks visible</td></tr>
+          <tr><td class="nw"><strong>12</strong></td><td colspan="2" style="text-align:center;color:var(--muted)"><code>T20</code> container &amp; cloud posture &middot; <code>T21</code> supply chain &middot; capstone</td><td class="nw">Handover</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:14px">The weekly rhythm</h3>
+    <div class="grid2">
+      <div class="card"><span class="tag">Monday</span><h4>Plan and predict</h4><p>Pick the task, read the referenced code, and write down what you expect to find <em>before</em> you look. Comparing your prediction against reality is where the learning is concentrated.</p></div>
+      <div class="card"><span class="tag">Midweek</span><h4>Swap and review</h4><p>Read your partner&rsquo;s open pull request properly &mdash; not for style, but for the question &ldquo;what does this still not stop?&rdquo;. That question is the whole job.</p></div>
+      <div class="card"><span class="tag">Friday</span><h4>Demo the proof, not the code</h4><p>Fifteen minutes: run the attack against the old build so it works, run it against the new one so it fails, run the app so it still works. Three commands, live.</p></div>
+      <div class="card"><span class="tag">Continuously</span><h4>Write it down as you go</h4><p>Every task produces a short written artefact. A fix nobody can find in six months is a fix that will be quietly reverted by someone who does not know why it is there.</p></div>
+    </div>
+
+    <h3 style="margin-top:14px">How the work is judged</h3>
+    <div class="tw">
+      <table style="min-width:640px">
+        <thead><tr><th class="nw">Criterion</th><th>What a strong answer looks like</th><th class="nw">Weight</th></tr></thead>
+        <tbody>
+          <tr><td class="nw"><strong>Evidence</strong></td><td>The verification command genuinely distinguishes fixed from unfixed. The intern noticed when a test proved nothing &mdash; an exit code that lies, a sequential test that could not fail.</td><td class="nw">30%</td></tr>
+          <tr><td class="nw"><strong>It still works</strong></td><td>The application runs end to end after the change. Legitimate clients were not locked out along with the attacker. Existing tests pass, or changes are explained.</td><td class="nw">25%</td></tr>
+          <tr><td class="nw"><strong>Reasoning</strong></td><td>Can state what the control does <em>not</em> stop, and which layer covers that instead. Chose thresholds and limits from measurement rather than habit.</td><td class="nw">20%</td></tr>
+          <tr><td class="nw"><strong>Communication</strong></td><td>Findings a non-engineer can act on: impact in terms of schools and children, not processes and ports. Traced to a file and line.</td><td class="nw">15%</td></tr>
+          <tr><td class="nw"><strong>Judgement</strong></td><td>Stopped and escalated rather than exploring further. Respected scope and the hardware protocol without needing reminding.</td><td class="nw">10%</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <h4>Capstone &mdash; the tabletop, week 12</h4>
+      <p>Two hours, no keyboards. Your supervisor presents a scenario: <em>a teacher reports that a robot moved on its own during a lesson, and the operator who appears in the logs says it was not them.</em> Working from the audit trail and the detection you built, you two must answer: what happened, which control failed, how would we know if it happened again, and what do we tell the school today? This is the exercise that ties every task together &mdash; and it is the closest thing to real incident response you can run without a real incident.</p>
+    </div>
+
+    <div class="note good">
+      <h4>What you should be able to do at the end</h4>
+      <p>Take an unfamiliar system, enumerate what it exposes, model how it could be attacked, implement controls at the right layer, prove they work, and explain honestly what they still do not cover. That transfers to every system either of you will work on afterwards &mdash; the MQTT specifics are the vehicle, not the destination.</p>
+    </div>
+  </section>
+
+  <section id="s16" class="stack" style="padding-top:52px">
+    <div class="sechead"><div class="bar"></div><p class="snum">16</p><h2>Glossary</h2></div>
+    <p class="prose">Terms used above that a second-year computer science course may not have covered yet. Ask about anything still unclear &mdash; nobody is expected to arrive knowing these.</p>
+
+    <div class="kv">
+      <div><dt>MQTT</dt><dd>A lightweight publish/subscribe messaging protocol built for devices on unreliable networks. Clients publish to a <em>topic</em>; the <em>broker</em> delivers to everyone subscribed to it. Nobody addresses anybody directly.</dd></div>
+      <div><dt>Broker</dt><dd>The server in the middle of MQTT. Every message passes through it, which is why it is the natural place to enforce who may say what.</dd></div>
+      <div><dt>ACL</dt><dd>Access control list. Here, the broker file stating which authenticated identity may publish or subscribe to which topic patterns.</dd></div>
+      <div><dt>QoS 0/1/2</dt><dd>MQTT delivery guarantees: fire-and-forget, at-least-once, exactly-once. Telemetry at 1&nbsp;Hz uses 0 &mdash; a redelivered stale reading is worse than a missing one. A command channel wants 1.</dd></div>
+      <div><dt>Trust boundary</dt><dd>A point where data moves between components with different trust levels. The receiving side must independently decide whether to act, rather than trusting the fact of arrival.</dd></div>
+      <div><dt>STRIDE</dt><dd>A checklist for finding threats: Spoofing, Tampering, Repudiation, Information disclosure, Denial of service, Elevation of privilege. Applied at each boundary so nothing is missed by accident.</dd></div>
+      <div><dt>JWT</dt><dd>JSON Web Token. A signed, self-describing token the server can verify without a database lookup. Its strength is statelessness; its weakness is that it cannot be cancelled before expiry without extra machinery.</dd></div>
+      <div><dt>jti</dt><dd>A unique identifier inside a JWT. The handle a revocation list keys on, which is how a stateless token becomes cancellable at logout.</dd></div>
+      <div><dt>mTLS</dt><dd>Mutual TLS. Both sides present certificates, so the server proves its identity to the client <em>and</em> the client proves its identity to the server. This is how per-device identity is normally done.</dd></div>
+      <div><dt>Replay attack</dt><dd>Capturing a legitimate message and sending it again later. The bytes are genuine and the signature valid, so only a nonce or an expiry can distinguish it from the original.</dd></div>
+      <div><dt>Nonce</dt><dd>A number used once. Recorded by the receiver so the same message cannot be accepted twice.</dd></div>
+      <div><dt>Constant-time compare</dt><dd>Comparing secrets in a way that takes the same time regardless of where they differ. A normal comparison returns early on the first mismatch, leaking how much of a guess was correct through timing.</dd></div>
+      <div><dt>Watchdog</dt><dd>A timer that triggers a safe action when something expected stops arriving. Here: no fresh command within an interval means command zero velocity.</dd></div>
+      <div><dt>cmd_vel</dt><dd>The ROS2 topic carrying velocity commands to a robot base. The last software step before motors turn &mdash; and therefore the last place anything can be stopped.</dd></div>
+      <div><dt>SDP / ICE / TURN</dt><dd>WebRTC machinery. SDP describes a media session, ICE finds a network path between two peers, and TURN relays media when no direct path exists. SDP is attacker-influenced text that reaches C libraries, which is why it is size- and format-checked.</dd></div>
+      <div><dt>Row-level security</dt><dd>A PostgreSQL feature applying a filter to every query automatically. Makes a forgotten tenant filter return nothing instead of everything.</dd></div>
+      <div><dt>SBOM</dt><dd>Software bill of materials: the full list of third-party components in a build, so a new advisory can be matched against what you actually ship.</dd></div>
+      <div><dt>Least privilege</dt><dd>Every identity gets exactly the access it needs and nothing more, so a compromise of any one of them is bounded.</dd></div>
+    </div>
+  </section>
+
+  <div class="foot">
+    <p><strong>Hardening the Fleet</strong> &mdash; security internship pack for the cloud-robotics teleoperation platform.</p>
+    <p>Companion material in this repository: <code>secure_robotstore/README.md</code> (the sandbox), <code>secure_robotstore/docs/exercises.md</code> (per-task detail for the sandbox rebuild), <code>docs/security-findings.md</code> (the audit this pack draws its real findings from), <code>docs/target-architecture.md</code> (where the platform is going), and <code>docs/11-aws-migration.md</code> (the AWS mapping).</p>
+    <p>Everything in this document is scoped to code in this repository. When the code changes and this document does not, the code is right &mdash; and updating it is a task too.</p>
+  </div>
+
+  </main>
+</div>
+
+<script>
+(function(){
+  var root = document.documentElement, btn = document.getElementById("themebtn");
+  function stored(){ try { return localStorage.getItem("hf-theme"); } catch(e){ return null; } }
+  function save(v){ try { localStorage.setItem("hf-theme", v); } catch(e){} }
+  var initial = stored();
+  if (initial === "light" || initial === "dark") root.setAttribute("data-theme", initial);
+  function current(){
+    var set = root.getAttribute("data-theme");
+    if (set) return set;
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  }
+  if (btn) btn.addEventListener("click", function(){
+    var next = current() === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    save(next);
+  });
+})();
+</script>

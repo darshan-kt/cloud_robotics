@@ -5,6 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ROBOSTORE</title>
     <meta name="description" content="ROBOSTORE — mission deck for robot operator apps." />
+    <meta name="theme-color" content="#100f0d" />
+    <!-- Theme, applied before first paint.
+         React cannot do this: by the time the bundle runs, the browser has
+         already painted a frame using whatever :root says, so a light-theme
+         user gets a dark flash on every load. This reads the same key the
+         useTheme hook writes and sets the attribute the CSS keys off. It is
+         deliberately tiny, synchronous, and in the <head>. -->
+    <script>
+      (function () {
+        try {
+          var p = localStorage.getItem("robostore_theme") || "auto";
+          var r =
+            p === "auto"
+              ? window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark"
+              : p;
+          document.documentElement.dataset.theme = r;
+        } catch (e) {
+          document.documentElement.dataset.theme = "dark";
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

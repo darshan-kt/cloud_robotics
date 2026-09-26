@@ -15,10 +15,12 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
+// Toast colour is semantic, matching the rest of the system: nominal for a
+// confirmed action, fault for a failure or a stop, coral for neutral notice.
 const TYPE_STYLES: Record<ToastType, { icon: typeof CheckCircle2; className: string }> = {
-  success: { icon: CheckCircle2, className: "border-emerald-500/40 text-emerald-400" },
-  error: { icon: XCircle, className: "border-rose-500/40 text-rose-400" },
-  info: { icon: Info, className: "border-blue-500/40 text-blue-400" },
+  success: { icon: CheckCircle2, className: "border-nominal/40 text-nominal" },
+  error: { icon: XCircle, className: "border-fault/50 text-fault-bright" },
+  info: { icon: Info, className: "border-coral/40 text-coral" },
 };
 
 const AUTO_DISMISS_MS = 4000;
@@ -43,20 +45,24 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ show }}>
       {children}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-full max-w-sm flex-col gap-2">
+      <div
+        role="status"
+        aria-live="polite"
+        className="pointer-events-none fixed bottom-lg right-lg z-[60] flex w-full max-w-sm flex-col gap-2"
+      >
         {toasts.map((toast) => {
           const { icon: Icon, className } = TYPE_STYLES[toast.type];
           return (
             <div
               key={toast.id}
-              className={`pointer-events-auto flex animate-fade-up items-start gap-3 rounded-xl border bg-surface/95 px-4 py-3 shadow-lg backdrop-blur ${className}`}
+              className={`pointer-events-auto flex animate-fade-up items-start gap-3 rounded-lg border bg-elevated px-md py-sm shadow-raise ${className}`}
             >
               <Icon className="mt-0.5 h-4 w-4 flex-shrink-0" />
-              <p className="flex-1 text-sm text-text">{toast.message}</p>
+              <p className="flex-1 font-sans text-body-sm text-ink">{toast.message}</p>
               <button
                 onClick={() => dismiss(toast.id)}
                 aria-label="Dismiss notification"
-                className="text-textDim hover:text-text"
+                className="text-faint transition-colors hover:text-ink"
               >
                 <X className="h-3.5 w-3.5" />
               </button>

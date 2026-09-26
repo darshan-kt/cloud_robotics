@@ -24,6 +24,10 @@
 BACKEND_PORT ?= 8000
 FRONTEND_PORT ?= 3000
 ROBOT_HEALTH_PORT ?= 8080
+ROBOT_02_ID ?= turtlebot3_02
+ROBOT_03_ID ?= turtlebot3_03
+ROBOT_02_HEALTH_PORT ?= 8180
+ROBOT_03_HEALTH_PORT ?= 8181
 OPERATOR_USERNAME ?= operator
 OPERATOR_PASSWORD ?= operator_dev_password
 ROBOSTORE_PORT ?= 3100
@@ -39,6 +43,7 @@ ROBOSTORE_DEMO_PASSWORD ?= 123456
 .PHONY: help setup build up up-test-pattern up-camera gzclient down restart restart-robot \
         ps status logs health token open test test-robot test-cloud clean prune _wait-healthy _xhost \
         robostore-build robostore-up robostore-up-prod robostore-down robostore-ps robostore-logs \
+        up-fleet fleet-down fleet-logs \
         robostore-open _robostore-wait
 
 help: ## Show this help
@@ -65,6 +70,23 @@ up: setup ## Start the full stack (7 services). Headless - use `make up-gui` to 
 	@echo "  Console:  http://localhost:$(FRONTEND_PORT)  (login: $(OPERATOR_USERNAME) / $(OPERATOR_PASSWORD))"
 	@echo "  Backend:  http://localhost:$(BACKEND_PORT)/health"
 	@echo "  Robot:    http://localhost:$(ROBOT_HEALTH_PORT)/health"
+
+up-fleet: setup ## Start the stack with THREE robots (adds 2 simulated fleet members - see docker-compose.fleet.yml)
+	docker compose -f docker-compose.yml -f docker-compose.fleet.yml up -d --build
+	@$(MAKE) --no-print-directory _wait-healthy
+	@echo
+	@echo "Fleet is up - 3 robots:"
+	@echo "  $(ROBOT_ID)  (full ROS2 + Gazebo + camera)"
+	@echo "  $(ROBOT_02_ID)  (simulated, no camera)  http://localhost:$(ROBOT_02_HEALTH_PORT)/health"
+	@echo "  $(ROBOT_03_ID)  (simulated, no camera)  http://localhost:$(ROBOT_03_HEALTH_PORT)/health"
+	@echo "  Console: http://localhost:$(FRONTEND_PORT)"
+
+fleet-down: ## Stop ONLY the 2 simulated fleet members, leaving the main stack up
+	docker compose -f docker-compose.yml -f docker-compose.fleet.yml stop robot-02 robot-03
+	docker compose -f docker-compose.yml -f docker-compose.fleet.yml rm -f robot-02 robot-03
+
+fleet-logs: ## Tail the simulated fleet members' logs
+	docker compose -f docker-compose.yml -f docker-compose.fleet.yml logs -f robot-02 robot-03
 
 up-test-pattern: setup ## Start the stack with a SYNTHETIC camera pattern (no physical webcam needed) - see docs/06-video-streaming.md
 	CAMERA_TEST_PATTERN_FALLBACK=true docker compose up -d --build
